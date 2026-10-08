@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Quiz control room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+Chettan+2:wght@400;500;600;700&family=Big+Shoulders+Display:wght@800;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --night: #2B0710; --night-2: #3D0B17; --red: #D7262E; --red-deep: #A8141E; --brass: #F2B33D; --brass-deep: #C98A12;
+  --leaf: #2FA36B; --leaf-deep: #1E7A4E; --paper: #FFFFFF; --bg: #F6EEE6; --line: #E8D9CB; --ink: #2B0710; --muted: #7A5A55;
+  --display: 'Big Shoulders Display', 'Arial Narrow', sans-serif; --body: 'Baloo Chettan 2', 'Noto Sans Malayalam', system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--brass); outline-offset: 2px; }
+[hidden] { display: none !important; }
+.btn { border: 0; border-radius: 10px; padding: 8px 14px; font-weight: 700; background: var(--night); color: #fff; }
+.btn.brass { background: var(--brass); color: var(--ink); }
+.btn.ghost { background: transparent; border: 1.5px solid var(--line); color: var(--ink); }
+.btn.danger { background: transparent; border: 1.5px solid #F2B8B5; color: var(--red-deep); }
+.btn.sm { padding: 4px 10px; font-size: 13px; }
+.btn:disabled { opacity: .5; cursor: default; }
+input, select, textarea { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; background: #fff; width: 100%; }
+textarea { resize: vertical; min-height: 70px; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--red); }
+label { display: flex; flex-direction: column; gap: 3px; font-weight: 600; font-size: 13px; color: var(--muted); }
+label > input, label > select, label > textarea { color: var(--ink); font-weight: 400; font-size: 15px; }
+
+/* login */
+.login { min-height: 100vh; display: grid; place-items: center; background: var(--night); padding: 16px; }
+.login form { background: #fff; border-radius: 20px; padding: 28px 24px; width: min(360px, 100%); display: flex; flex-direction: column; gap: 14px; }
+.login h1 { margin: 0; font-family: var(--display); font-size: 40px; line-height: 1; }
+.login p { margin: 0; color: var(--muted); }
+.err { color: var(--red-deep); font-weight: 600; min-height: 1.2em; margin: 0; }
+
+/* shell */
+header.top { background: var(--night); color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10; flex-wrap: wrap; }
+header.top h1 { margin: 0; font-family: var(--display); font-weight: 900; font-size: 26px; letter-spacing: .01em; }
+header.top h1 small { font-family: var(--body); font-weight: 500; font-size: 13px; color: #E9BDB5; margin-left: 6px; letter-spacing: 0; }
+nav.tabs { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+nav.tabs button { background: none; border: 0; color: #E9BDB5; padding: 6px 12px; border-radius: 999px; font-weight: 700; }
+nav.tabs button.on { background: var(--brass); color: var(--ink); }
+nav.tabs .out { color: #fff; opacity: .7; }
+main { max-width: 1180px; margin: 0 auto; padding: 18px 16px 60px; }
+h2 { font-family: var(--display); font-weight: 900; font-size: 30px; margin: 0 0 12px; }
+h3 { margin: 0 0 10px; font-size: 16px; }
+.panel { background: var(--paper); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+.grid { display: grid; gap: 14px; }
+.kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 14px; }
+.kpi { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
+.kpi b { display: block; font-family: var(--display); font-weight: 900; font-size: 36px; line-height: 1.05; }
+.kpi span { color: var(--muted); font-size: 13px; font-weight: 600; }
+.kpi em { font-style: normal; color: var(--leaf-deep); font-size: 13px; font-weight: 700; }
+.two { grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.toolbar input[type=search] { max-width: 260px; }
+.toolbar select { width: auto; }
+.toolbar .grow { flex: 1; }
+
+/* charts */
+.bars { display: flex; flex-direction: column; gap: 6px; }
+.bar { display: grid; grid-template-columns: 130px 1fr 64px; align-items: center; gap: 8px; font-size: 13px; }
+.bar .track { height: 14px; background: #F3E6DA; border-radius: 4px; overflow: hidden; }
+.bar .fill { display: block; height: 100%; background: var(--red); border-radius: 4px; }
+.bar .v { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bar .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cols { display: flex; align-items: flex-end; gap: 3px; height: 150px; padding-top: 18px; }
+.col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 3px; min-width: 0; }
+.col i { display: block; width: 100%; background: var(--red); border-radius: 3px 3px 0 0; min-height: 2px; position: relative; }
+.col i[data-v]:hover::after { content: attr(data-v); position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 12px; font-weight: 700; background: var(--night); color: #fff; padding: 0 6px; border-radius: 4px; white-space: nowrap; }
+.col small { font-size: 10px; color: var(--muted); white-space: nowrap; }
+.legend { font-size: 12px; color: var(--muted); }
+.lvl { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.lvl.easy { background: #CDEFD9; color: var(--leaf-deep); }
+.lvl.medium { background: #FBE6B8; color: #8A5E00; }
+.lvl.hard { background: #FBD0D2; color: var(--red-deep); }
+
+/* tables */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 700; padding: 8px; border-bottom: 1.5px solid var(--line); white-space: nowrap; }
+td { padding: 8px; border-bottom: 1px solid #F1E6DB; vertical-align: top; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: #FBF5EF; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 10px; color: var(--muted); }
+
+/* questions */
+.qlist { display: flex; flex-direction: column; gap: 10px; }
+.q { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.q.off { opacity: .55; }
+.q .qt { font-weight: 700; font-size: 16px; }
+.q .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; color: var(--muted); font-size: 13px; margin-bottom: 4px; }
+.q ol { margin: 6px 0 0; padding-left: 22px; list-style: upper-alpha; }
+.q ol li.ok { color: var(--leaf-deep); font-weight: 700; }
+.q .acts { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.acc { font-weight: 700; }
+.acc.low { color: var(--red-deep); }
+
+/* modal / drawer */
+.modal { position: fixed; inset: 0; background: rgba(43, 7, 16, .55); display: grid; place-items: center; z-index: 50; padding: 16px; }
+.modal .box { background: #fff; border-radius: 18px; width: min(640px, 100%); max-height: 92vh; overflow: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.modal .box.wide { width: min(900px, 100%); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.optrow { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+.optrow input[type=radio] { width: 20px; height: 20px; accent-color: var(--leaf); }
+.foot { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.check { flex-direction: row; align-items: center; gap: 8px; color: var(--ink); font-size: 15px; }
+.check input { width: auto; }
+.hint { color: var(--muted); font-size: 13px; margin: 0; }
+.game { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+.game.void { background: #FBEDEC; }
+.game header { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.game header b { font-family: var(--display); font-size: 24px; }
+.ans { font-size: 13px; padding: 4px 0; border-top: 1px dashed #F1E6DB; display: grid; grid-template-columns: 22px 1fr auto; gap: 6px; }
+.ans .mk.ok { color: var(--leaf-deep); font-weight: 800; }
+.ans .mk.no { color: var(--red); font-weight: 800; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--night); color: #fff; padding: 10px 16px; border-radius: 12px; z-index: 60; font-weight: 600; }
+pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size: 12px; overflow-x: auto; margin: 0; }
+@media (max-width: 640px) {
+  .bar { grid-template-columns: 96px 1fr 52px; }
+  .q { grid-template-columns: 1fr; }
+  .q .acts { flex-direction: row; }
+  .row2 { grid-template-columns: 1fr; }
+  nav.tabs { margin-left: 0; width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+}
+</style>
+</head>
+<body>
+
+<section class="login" id="login">
+  <form id="loginForm">
+    <h1>Control room</h1>
+    <p>Quiz admin. Enter the admin password.</p>
+    <label>Password <input type="password" name="password" autocomplete="current-password" required autofocus></label>
+    <p class="err" id="loginErr" role="alert"></p>
+    <button class="btn brass" type="submit">Log in</button>
+  </form>
+</section>
+
+<div id="shell" hidden>
+  <header class="top">
+    <h1>Control room<small id="liveTitle"></small></h1>
+    <nav class="tabs" id="tabs">
+      <button data-tab="insights" class="on">Insights</button>
+      <button data-tab="questions">Questions</button>
+      <button data-tab="players">Players &amp; scores</button>
+      <button data-tab="settings">Settings</button>
+      <button class="out" id="logout">Log out</button>
+    </nav>
+  </header>
+  <main>
+    <!-- Insights -->
+    <section data-view="insights">
+      <div class="toolbar"><h2 class="grow" style="margin:0">Insights</h2><button class="btn ghost sm" id="refresh">Refresh</button></div>
+      <div class="grid kpis" id="kpis"></div>
+      <div class="grid two">
+        <div class="panel"><h3>Games per day (last 30 days)</h3><div class="cols" id="dailyChart"></div><p class="legend" id="dailyLegend"></p></div>
+        <div class="panel"><h3>Players by district</h3><div class="bars" id="districtChart"></div></div>
+        <div class="panel"><h3>District performance</h3><div class="table-wrap"><table id="districtTable"></table></div></div>
+        <div class="panel"><h3>Right answers per game</h3><div class="cols" id="spreadChart"></div><p class="legend">How many games ended with 0, 1, 2… correct answers.</p></div>
+        <div class="panel"><h3>Accuracy by level</h3><div class="bars" id="levelChart"></div></div>
+        <div class="panel"><h3>When people play (IST)</h3><div class="cols" id="hourChart"></div></div>
+        <div class="panel" style="grid-column:1/-1"><h3>Hardest questions</h3><p class="hint">Lowest share of right answers, among questions answered at least 3 times. Check these for wording or a wrong answer key.</p><div class="table-wrap"><table id="hardTable"></table></div></div>
+      </div>
+    </section>
+
+    <!-- Questions -->
+    <section data-view="questions" hidden>
+      <h2>Question pool</h2>
+      <div class="toolbar">
+        <input type="search" id="qSearch" placeholder="Search questions">
+        <select id="qLevel"><option value="">All levels</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
+        <select id="qActive"><option value="">Active and hidden</option><option value="1">Active only</option><option value="0">Hidden only</option></select>
+        <span class="grow legend" id="qCount"></span>
+        <button class="btn ghost" id="importBtn">Import CSV</button>
+        <button class="btn brass" id="addQ">Add question</button>
+      </div>
+      <div class="qlist" id="qList"></div>
+    </section>
+
+    <!-- Players -->
+    <section data-view="players" hidden>
+      <h2>Players and scores</h2>
+      <div class="toolbar">
+        <input type="search" id="pSearch" placeholder="Name, office or phone">
+        <select id="pDistrict"><option value="">All districts</option></select>
+        <span class="grow"></span>
+        <button class="btn ghost sm" data-export="leaderboard">Leaderboard CSV</button>
+        <button class="btn ghost sm" data-export="games">All games CSV</button>
+        <button class="btn ghost sm" data-export="players">Players CSV</button>
+      </div>
+      <div class="panel">
+        <div class="table-wrap"><table id="pTable"></table></div>
+        <div class="pager"><span id="pInfo"></span><button class="btn ghost sm" id="pPrev">Previous</button><button class="btn ghost sm" id="pNext">Next</button></div>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section data-view="settings" hidden>
+      <h2>Game settings</h2>
+      <form class="panel grid" id="setForm" style="max-width:720px">
+        <h3>Campaign</h3>
+        <div class="row2">
+          <label>Quiz title <input name="title" maxlength="60"></label>
+          <label>Organisation line <input name="subtitle" maxlength="100"></label>
+        </div>
+        <label>Tagline <input name="tagline" maxlength="140"></label>
+        <label>Values shown on the welcome screen (one per line) <textarea name="values" rows="4"></textarea></label>
+        <h3>Game</h3>
+        <div class="row2">
+          <label>Easy questions per game <input name="easy" type="number" min="0" max="30"></label>
+          <label>Medium questions per game <input name="medium" type="number" min="0" max="30"></label>
+          <label>Hard questions per game <input name="hard" type="number" min="0" max="30"></label>
+          <label>Seconds per question <input name="timeLimitSec" type="number" min="5" max="120"></label>
+          <label>Easy points <input name="p_easy" type="number" min="0"></label>
+          <label>Medium points <input name="p_medium" type="number" min="0"></label>
+          <label>Hard points <input name="p_hard" type="number" min="0"></label>
+          <label>Streak bonus per answer in a row <input name="streakBonus" type="number" min="0"></label>
+          <label>Streak bonus cap <input name="streakCap" type="number" min="0"></label>
+          <label>Attempts per player (0 = unlimited) <input name="maxAttempts" type="number" min="0" max="100"></label>
+        </div>
+        <label class="check"><input type="checkbox" name="open"> Quiz is open for new games</label>
+        <label class="check"><input type="checkbox" name="showExplanation"> Show the explanation after each answer</label>
+        <p class="hint">Changes apply to games started after you save. Games already in progress keep their rules.</p>
+        <div class="foot"><button class="btn brass" type="submit">Save settings</button></div>
+      </form>
+      <div class="panel" style="max-width:720px;margin-top:14px">
+        <h3>Backup</h3>
+        <p class="hint">Download the full question pool as CSV. The same format works for Import CSV.</p>
+        <div class="foot" style="justify-content:flex-start;margin-top:8px"><button class="btn ghost" data-export="questions">Questions CSV</button></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Question editor -->
+<div class="modal" id="qModal" hidden>
+  <form class="box" id="qForm">
+    <h2 id="qFormTitle" style="margin:0">Add question</h2>
+    <label>Question <textarea name="question" maxlength="600" required></textarea></label>
+    <div>
+      <p class="hint" style="margin-bottom:6px">Options. Select the right answer with the round button.</p>
+      <div id="optRows" class="grid" style="gap:8px"></div>
+      <button type="button" class="btn ghost sm" id="addOpt" style="margin-top:8px">Add option</button>
+    </div>
+    <div class="row2">
+      <label>Level <select name="difficulty"><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label>
+      <label>Category <input name="category" maxlength="60" list="cats" placeholder="e.g. Constitution"></label>
+    </div>
+    <datalist id="cats"></datalist>
+    <label>Explanation shown after answering (optional) <textarea name="explanation" maxlength="600"></textarea></label>
+    <label class="check"><input type="checkbox" name="active" checked> Active (can appear in games)</label>
+    <p class="err" id="qErr"></p>
+    <div class="foot"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn brass" type="submit">Save question</button></div>
+  </form>
+</div>
+
+<!-- Import -->
+<div class="modal" id="impModal" hidden>
+  <div class="box">
+    <h2 style="margin:0">Import questions</h2>
+    <p class="hint">Upload a CSV with a header row. Columns: <b>difficulty</b> (easy / medium / hard), <b>category</b>, <b>question</b>, <b>option_a</b> to <b>option_f</b> (at least two), <b>correct</b> (letter A–F), <b>explanation</b>. Malayalam text works; save the file as CSV UTF-8.</p>
+    <pre class="sample">difficulty,category,question,option_a,option_b,option_c,option_d,correct,explanation
+easy,Kerala,How many districts does Kerala have?,12,14,15,16,B,Kerala has 14 districts.</pre>
+    <input type="file" id="impFile" accept=".csv,text/csv">
+    <p class="err" id="impErr"></p>
+    <div id="impPreview" class="hint"></div>
+    <div class="foot"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn brass" id="impGo" disabled>Import</button></div>
+  </div>
+</div>
+
+<!-- Player detail -->
+<div class="modal" id="pModal" hidden>
+  <div class="box wide" id="pBox"></div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (s, el = document) => el.querySelector(s);
+  const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmt = (n) => Number(n || 0).toLocaleString('en-IN');
+  const when = (d) => d ? new Date(d).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '–';
+  let token = sessionStorage.getItem('adm.token');
+  let toastT;
+  const toast = (m) => { const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 3000); };
+
+  async function api(method, path, data, raw) {
+    const res = await fetch('/api/admin/' + path, {
+      method, headers: { authorization: 'Bearer ' + token, ...(data ? { 'content-type': 'application/json' } : {}) },
+      body: data ? JSON.stringify(data) : undefined,
+    });
+    if (res.status === 401 && path !== 'login') { logout(); throw new Error('Session expired. Log in again.'); }
+    if (raw && res.ok) return res;
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || 'Request failed');
+    return body;
+  }
+
+  // ---------- login ----------
+  $('#loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('#loginErr').textContent = '';
+    try {
+      const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: e.target.password.value }) });
+      const b = await r.json();
+      if (!r.ok) throw new Error(b.error);
+      token = b.token; sessionStorage.setItem('adm.token', token); e.target.reset(); enter();
+    } catch (ex) { $('#loginErr').textContent = ex.message; }
+  });
+  function logout() { token = null; sessionStorage.removeItem('adm.token'); $('#shell').hidden = true; $('#login').hidden = false; }
+  $('#logout').addEventListener('click', logout);
+  function enter() { $('#login').hidden = true; $('#shell').hidden = false; go('insights'); }
+
+  // ---------- tabs ----------
+  const loaders = { insights: loadStats, questions: loadQuestions, players: loadPlayers, settings: loadSettings };
+  function go(tab) {
+    $$('#tabs [data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+    $$('[data-view]').forEach((v) => (v.hidden = v.dataset.view !== tab));
+    loaders[tab]().catch((e) => toast(e.message));
+  }
+  $$('#tabs [data-tab]').forEach((b) => b.addEventListener('click', () => go(b.dataset.tab)));
+  $$('.modal').forEach((m) => m.addEventListener('click', (e) => { if (e.target === m || e.target.closest('[data-close]')) m.hidden = true; }));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $$('.modal').forEach((m) => (m.hidden = true)); });
+
+  // ---------- insights ----------
+  let districts = [];
+  async function loadStats() {
+    const s = await api('GET', 'stats');
+    districts = s.districts;
+    if ($('#pDistrict').options.length === 1) $('#pDistrict').insertAdjacentHTML('beforeend', districts.map((d) => `<option>${esc(d)}</option>`).join(''));
+    const t = s.totals;
+    const done = t.games ? Math.round((t.finished / t.games) * 100) : 0;
+    const kpi = (v, l, sub) => `<div class="kpi"><b>${v}</b><span>${l}</span>${sub ? `<br><em>${sub}</em>` : ''}</div>`;
+    $('#kpis').innerHTML = [
+      kpi(fmt(t.players), 'Players registered', t.players_24h ? `+${fmt(t.players_24h)} in 24 hours` : ''),
+      kpi(fmt(t.finished), 'Games finished', t.games_24h ? `${fmt(t.games_24h)} started in 24 hours` : ''),
+      kpi(done + '%', 'Games completed', `${fmt(t.games - t.finished)} left midway`),
+      kpi(fmt(t.avg_score), 'Average score', `Top score ${fmt(t.top_score)}`),
+      kpi(`${t.avg_correct}/${t.avg_total}`, 'Average right answers'),
+      kpi(fmt(t.active_questions), 'Active questions'),
+    ].join('');
+
+    // daily
+    const days = []; const map = Object.fromEntries(s.daily.map((d) => [d.day, d]));
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(Date.now() + 5.5 * 3600e3 - i * 864e5).toISOString().slice(0, 10);
+      days.push({ day: d, games: map[d]?.games || 0, players: map[d]?.players || 0 });
+    }
+    cols('#dailyChart', days.map((d, i) => ({ v: d.games, tip: `${d.day.slice(5)}: ${d.games} games, ${d.players} players`, l: i % 5 === 4 ? d.day.slice(8) : '' })));
+    const g30 = days.reduce((a, d) => a + d.games, 0);
+    $('#dailyLegend').textContent = `${fmt(g30)} game${g30 === 1 ? '' : 's'} in the last 30 days. Hover a bar for the day.`;
+
+    const byD = Object.fromEntries(s.byDistrict.map((d) => [d.district, d]));
+    const drows = districts.map((d) => ({ district: d, players: 0, games: 0, avg_score: 0, top_score: 0, ...byD[d] })).sort((a, b) => b.players - a.players);
+    bars('#districtChart', drows.map((d) => ({ l: d.district, v: d.players })));
+    $('#districtTable').innerHTML = `<tr><th>District</th><th class="num">Players</th><th class="num">Games</th><th class="num">Avg score</th><th class="num">Top</th></tr>` +
+      drows.map((d) => `<tr><td>${esc(d.district)}</td><td class="num">${fmt(d.players)}</td><td class="num">${fmt(d.games)}</td><td class="num">${fmt(d.avg_score)}</td><td class="num">${fmt(d.top_score)}</td></tr>`).join('');
+
+    const maxC = Math.max(10, ...s.spread.map((x) => x.correct));
+    const sp = Object.fromEntries(s.spread.map((x) => [x.correct, x.games]));
+    cols('#spreadChart', Array.from({ length: maxC + 1 }, (_, i) => ({ v: sp[i] || 0, tip: `${i} right: ${sp[i] || 0} games`, l: String(i) })));
+    const lv = Object.fromEntries(s.byLevel.map((x) => [x.difficulty, x]));
+    bars('#levelChart', ['easy', 'medium', 'hard'].map((l) => ({ l: `${l[0].toUpperCase() + l.slice(1)} (${fmt(lv[l]?.attempts)} answers)`, v: lv[l]?.accuracy || 0, max: 100, suffix: '%' })));
+    const hr = Object.fromEntries(s.hourly.map((x) => [x.hour, x.games]));
+    cols('#hourChart', Array.from({ length: 24 }, (_, h) => ({ v: hr[h] || 0, tip: `${h}:00–${h + 1}:00: ${hr[h] || 0} games`, l: h % 3 === 0 ? String(h) : '' })));
+    $('#hardTable').innerHTML = s.hardest.length
+      ? `<tr><th>Question</th><th>Level</th><th class="num">Answered</th><th class="num">Right</th></tr>` +
+        s.hardest.map((q) => `<tr><td>${esc(q.question)}</td><td><span class="lvl ${q.difficulty}">${q.difficulty}</span></td><td class="num">${fmt(q.attempts)}</td><td class="num"><span class="acc low">${q.accuracy}%</span></td></tr>`).join('')
+      : '<tr><td class="hint">Not enough answers yet.</td></tr>';
+  }
+  function bars(sel, items) {
+    const max = Math.max(1, ...items.map((i) => i.max || i.v));
+    $(sel).innerHTML = items.map((i) => `<div class="bar"><span class="lbl" title="${esc(i.l)}">${esc(i.l)}</span><span class="track"><span class="fill" style="width:${(i.v / (i.max || max)) * 100}%"></span></span><span class="v">${fmt(i.v)}${i.suffix || ''}</span></div>`).join('');
+  }
+  function cols(sel, items) {
+    const max = Math.max(1, ...items.map((i) => i.v));
+    $(sel).innerHTML = items.map((i) => `<div class="col"><i data-v="${esc(i.tip)}" style="height:${(i.v / max) * 100}%"></i><small>${esc(i.l)}</small></div>`).join('');
+  }
+  $('#refresh').addEventListener('click', () => loadStats().then(() => toast('Updated')).catch((e) => toast(e.message)));
+
+  // ---------- questions ----------
+  let questions = [];
+  async function loadQuestions() {
+    questions = (await api('GET', 'questions')).questions;
+    $('#cats').innerHTML = [...new Set(questions.map((q) => q.category).filter(Boolean))].map((c) => `<option value="${esc(c)}">`).join('');
+    renderQuestions();
+  }
+  function renderQuestions() {
+    const s = $('#qSearch').value.trim().toLowerCase(), l = $('#qLevel').value, a = $('#qActive').value;
+    const list = questions.filter((q) => (!l || q.difficulty === l) && (!a || String(+q.active) === a) &&
+      (!s || q.question.toLowerCase().includes(s) || (q.category || '').toLowerCase().includes(s) || q.options.some((o) => o.toLowerCase().includes(s))));
+    const counts = ['easy', 'medium', 'hard'].map((lv) => `${questions.filter((q) => q.active && q.difficulty === lv).length} ${lv}`).join(', ');
+    $('#qCount').textContent = `Showing ${list.length} of ${questions.length}. Active: ${counts}.`;
+    $('#qList').innerHTML = list.map((q) => `
+      <article class="q${q.active ? '' : ' off'}">
+        <div>
+          <div class="meta"><span class="lvl ${q.difficulty}">${q.difficulty}</span>${q.category ? `<span>${esc(q.category)}</span>` : ''}
+            <span>${q.attempts ? `${fmt(q.attempts)} answers, <span class="acc${q.accuracy < 35 ? ' low' : ''}">${q.accuracy}% right</span>, avg ${(q.avg_ms / 1000).toFixed(1)}s` : 'Not answered yet'}</span>
+            ${q.active ? '' : '<b>Hidden</b>'}</div>
+          <div class="qt">${esc(q.question)}</div>
+          <ol>${q.options.map((o, i) => `<li class="${i === q.correct_index ? 'ok' : ''}">${esc(o)}</li>`).join('')}</ol>
+        </div>
+        <div class="acts">
+          <button class="btn ghost sm" data-edit="${q.id}">Edit</button>
+          <button class="btn ghost sm" data-toggle="${q.id}">${q.active ? 'Hide' : 'Show'}</button>
+          <button class="btn danger sm" data-del="${q.id}">Delete</button>
+        </div>
+      </article>`).join('') || '<p class="hint">No questions match.</p>';
+  }
+  ['#qSearch', '#qLevel', '#qActive'].forEach((s) => $(s).addEventListener('input', renderQuestions));
+  $('#qList').addEventListener('click', async (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const id = Number(b.dataset.edit || b.dataset.toggle || b.dataset.del);
+    const q = questions.find((x) => x.id === id);
+    try {
+      if (b.dataset.edit) openEditor(q);
+      if (b.dataset.toggle) { await api('PUT', 'questions/' + id, { ...q, active: !q.active }); toast(q.active ? 'Question hidden' : 'Question is active'); await loadQuestions(); }
+      if (b.dataset.del) {
+        if (!confirm('Delete this question? If players already answered it, it will be hidden instead so their history stays intact.')) return;
+        const r = await api('DELETE', 'questions/' + id);
+        toast(r.deactivated ? 'Question has answers, so it was hidden' : 'Question deleted'); await loadQuestions();
+      }
+    } catch (ex) { toast(ex.message); }
+  });
+
+  let editing = null;
+  function optRow(v = '', checked = false) {
+    const n = $('#optRows').children.length;
+    const div = document.createElement('div'); div.className = 'optrow';
+    div.innerHTML = `<input type="radio" name="correct" ${checked ? 'checked' : ''} aria-label="Right answer"><input class="opt" maxlength="240" placeholder="Option ${'ABCDEF'[n]}" value="${esc(v)}"><button type="button" class="btn ghost sm" aria-label="Remove option">✕</button>`;
+    div.querySelector('button').addEventListener('click', () => { if ($('#optRows').children.length > 2) div.remove(); });
+    $('#optRows').append(div);
+  }
+  function openEditor(q) {
+    editing = q || null;
+    const f = $('#qForm'); f.reset(); $('#qErr').textContent = '';
+    $('#qFormTitle').textContent = q ? 'Edit question' : 'Add question';
+    $('#optRows').innerHTML = '';
+    (q ? q.options : ['', '', '', '']).forEach((o, i) => optRow(o, q ? i === q.correct_index : false));
+    f.question.value = q?.question || ''; f.difficulty.value = q?.difficulty || 'easy';
+    f.category.value = q?.category || ''; f.explanation.value = q?.explanation || ''; f.active.checked = q ? q.active : true;
+    $('#qModal').hidden = false; f.question.focus();
+  }
+  $('#addQ').addEventListener('click', () => openEditor(null));
+  $('#addOpt').addEventListener('click', () => { if ($('#optRows').children.length < 6) optRow(); });
+  $('#qForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target, rows = $$('#optRows .optrow');
+    const data = {
+      question: f.question.value, options: rows.map((r) => r.querySelector('.opt').value.trim()),
+      correct_index: rows.findIndex((r) => r.querySelector('[type=radio]').checked),
+      difficulty: f.difficulty.value, category: f.category.value, explanation: f.explanation.value, active: f.active.checked,
+    };
+    if (data.correct_index < 0) { $('#qErr').textContent = 'Select the right answer with the round button.'; return; }
+    try {
+      await api(editing ? 'PUT' : 'POST', 'questions' + (editing ? '/' + editing.id : ''), data);
+      $('#qModal').hidden = true; toast(editing ? 'Question updated' : 'Question added'); await loadQuestions();
+    } catch (ex) { $('#qErr').textContent = ex.message; }
+  });
+
+  // CSV import
+  function parseCSV(text) {
+    const rows = []; let row = [], cell = '', q = false;
+    text = text.replace(/^﻿/, '');
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+      else if (c === '"') q = true;
+      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += c;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter((r) => r.some((x) => x.trim()));
+  }
+  let pending = [];
+  $('#importBtn').addEventListener('click', () => { $('#impFile').value = ''; $('#impErr').textContent = ''; $('#impPreview').textContent = ''; $('#impGo').disabled = true; $('#impModal').hidden = false; });
+  $('#impFile').addEventListener('change', async (e) => {
+    $('#impErr').textContent = ''; pending = []; $('#impGo').disabled = true;
+    const file = e.target.files[0]; if (!file) return;
+    const rows = parseCSV(await file.text());
+    if (rows.length < 2) { $('#impErr').textContent = 'The file has no question rows.'; return; }
+    const head = rows[0].map((h) => h.trim().toLowerCase());
+    const col = (n) => head.indexOf(n);
+    if (col('question') < 0 || col('correct') < 0 || col('difficulty') < 0) { $('#impErr').textContent = 'The header needs difficulty, question, option_a, option_b … and correct columns.'; return; }
+    const optCols = ['a', 'b', 'c', 'd', 'e', 'f'].map((x) => col('option_' + x)).filter((i) => i >= 0);
+    const problems = [];
+    rows.slice(1).forEach((r, n) => {
+      const opts = optCols.map((i) => (r[i] || '').trim()).filter(Boolean);
+      const c = (r[col('correct')] || '').trim().toUpperCase();
+      const ci = /^[A-F]$/.test(c) ? c.charCodeAt(0) - 65 : (/^\d$/.test(c) ? Number(c) - 1 : -1);
+      const d = (r[col('difficulty')] || '').trim().toLowerCase();
+      if (!r[col('question')]?.trim() || opts.length < 2 || ci < 0 || ci >= opts.length || !['easy', 'medium', 'hard'].includes(d)) { problems.push(n + 2); return; }
+      pending.push({ question: r[col('question')].trim(), options: opts, correct: ci, difficulty: d,
+        category: col('category') >= 0 ? r[col('category')] : '', explanation: col('explanation') >= 0 ? r[col('explanation')] : '' });
+    });
+    const by = ['easy', 'medium', 'hard'].map((l) => `${pending.filter((p) => p.difficulty === l).length} ${l}`).join(', ');
+    $('#impPreview').innerHTML = `Ready to import <b>${pending.length}</b> questions (${by}).` + (problems.length ? `<br>Skipping rows ${problems.slice(0, 15).join(', ')}${problems.length > 15 ? '…' : ''}: missing question, options, level or a valid answer letter.` : '');
+    $('#impGo').disabled = !pending.length;
+  });
+  $('#impGo').addEventListener('click', async () => {
+    try {
+      $('#impGo').disabled = true;
+      const r = await api('POST', 'questions/import', { questions: pending });
+      $('#impModal').hidden = true; toast(`Imported ${r.imported} questions`); await loadQuestions();
+    } catch (ex) { $('#impErr').textContent = ex.message; $('#impGo').disabled = false; }
+  });
+
+  // ---------- players ----------
+  let page = 0, pTimer;
+  async function loadPlayers() {
+    if (!districts.length) { const s = await api('GET', 'stats'); districts = s.districts; $('#pDistrict').insertAdjacentHTML('beforeend', districts.map((d) => `<option>${esc(d)}</option>`).join('')); }
+    const p = new URLSearchParams({ q: $('#pSearch').value.trim(), district: $('#pDistrict').value, page });
+    const r = await api('GET', 'players?' + p);
+    $('#pTable').innerHTML = `<tr><th>Name</th><th>Office</th><th>District</th><th>Phone</th><th class="num">Games</th><th class="num">Best</th><th class="num">Right</th><th>Last played</th></tr>` +
+      (r.players.map((x) => `<tr class="click" data-id="${x.id}"><td><b>${esc(x.name)}</b></td><td>${esc(x.office)}</td><td>${esc(x.district)}</td><td>${esc(x.phone)}</td>
+        <td class="num">${x.games}</td><td class="num"><b>${x.best == null ? '–' : fmt(x.best)}</b></td><td class="num">${x.best_correct ?? '–'}</td><td>${when(x.last_played)}</td></tr>`).join('') ||
+      '<tr><td colspan="8" class="hint">No players match.</td></tr>');
+    $('#pInfo').textContent = r.total ? `${page * 50 + 1}–${Math.min(r.total, page * 50 + 50)} of ${fmt(r.total)}` : '';
+    $('#pPrev').disabled = page === 0; $('#pNext').disabled = (page + 1) * 50 >= r.total;
+  }
+  $('#pSearch').addEventListener('input', () => { clearTimeout(pTimer); pTimer = setTimeout(() => { page = 0; loadPlayers().catch((e) => toast(e.message)); }, 300); });
+  $('#pDistrict').addEventListener('change', () => { page = 0; loadPlayers().catch((e) => toast(e.message)); });
+  $('#pPrev').addEventListener('click', () => { page--; loadPlayers(); });
+  $('#pNext').addEventListener('click', () => { page++; loadPlayers(); });
+  $('#pTable').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) openPlayer(tr.dataset.id); });
+
+  async function openPlayer(id) {
+    const r = await api('GET', 'players/' + id);
+    const p = r.player;
+    const byGame = {};
+    r.answers.forEach((a) => (byGame[a.game_id] ||= []).push(a));
+    $('#pBox').innerHTML = `
+      <div class="toolbar" style="margin:0"><h2 class="grow" style="margin:0">${esc(p.name)}</h2><button class="btn ghost sm" data-close>Close</button></div>
+      <p class="hint" style="margin:0">${esc(p.office)}, ${esc(p.district)}. Phone ${esc(p.phone)}. Registered ${when(p.created_at)}.</p>
+      ${r.games.map((g) => `
+        <div class="game${g.status === 'void' ? ' void' : ''}">
+          <header><b>${fmt(g.score)}</b><span>${g.correct_count}/${g.total} right, ${(g.total_ms / 1000).toFixed(1)}s, best streak ${g.best_streak}</span>
+            <span class="hint">${g.status === 'playing' ? 'Not finished' : g.status === 'void' ? 'Voided' : 'Finished'} ${when(g.finished_at || g.started_at)}</span>
+            <span class="grow"></span>
+            ${g.status === 'finished' ? `<button class="btn danger sm" data-void="${g.id}">Void this game</button>` : ''}
+            ${g.status === 'void' ? `<button class="btn ghost sm" data-restore="${g.id}">Restore</button>` : ''}
+          </header>
+          <details><summary class="hint">Answers</summary>
+          ${(byGame[g.id] || []).map((a) => `<div class="ans"><span class="mk ${a.is_correct ? 'ok' : 'no'}">${a.is_correct ? '✓' : '✕'}</span>
+            <span>${esc(a.question)}<br><span class="hint">Chose: ${a.chosen_index == null ? 'no answer (time ran out)' : esc(a.options[a.chosen_index])}${a.is_correct ? '' : `. Right: ${esc(a.options[a.correct_index])}`}</span></span>
+            <span class="num">${a.points} pts<br><span class="hint">${(a.time_ms / 1000).toFixed(1)}s</span></span></div>`).join('')}
+          </details>
+        </div>`).join('') || '<p class="hint">No games yet.</p>'}`;
+    $('#pModal').hidden = false;
+    $('#pBox').onclick = async (e) => {
+      const b = e.target.closest('[data-void],[data-restore]'); if (!b) return;
+      if (b.dataset.void && !confirm('Void this game? It will be removed from the leaderboard.')) return;
+      try {
+        await api('POST', `games/${b.dataset.void || b.dataset.restore}/${b.dataset.void ? 'void' : 'restore'}`, {});
+        toast(b.dataset.void ? 'Game voided' : 'Game restored'); openPlayer(id); loadPlayers();
+      } catch (ex) { toast(ex.message); }
+    };
+  }
+
+  // exports
+  $$('[data-export]').forEach((b) => b.addEventListener('click', async () => {
+    try {
+      const res = await api('GET', 'export?type=' + b.dataset.export, null, true);
+      const blob = await res.blob();
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = `quiz-${b.dataset.export}-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (ex) { toast(ex.message); }
+  }));
+
+  // ---------- settings ----------
+  async function loadSettings() {
+    const s = await api('GET', 'settings'), f = $('#setForm');
+    $('#liveTitle').textContent = s.title;
+    ['title', 'subtitle', 'tagline', 'easy', 'medium', 'hard', 'timeLimitSec', 'streakBonus', 'streakCap', 'maxAttempts'].forEach((k) => (f[k].value = s[k]));
+    f.values.value = (s.values || []).join('\n');
+    f.p_easy.value = s.points.easy; f.p_medium.value = s.points.medium; f.p_hard.value = s.points.hard;
+    f.open.checked = s.open; f.showExplanation.checked = s.showExplanation;
+  }
+  $('#setForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const data = {
+      title: f.title.value, subtitle: f.subtitle.value, tagline: f.tagline.value,
+      values: f.values.value.split('\n').map((v) => v.trim()).filter(Boolean),
+      easy: f.easy.value, medium: f.medium.value, hard: f.hard.value, timeLimitSec: f.timeLimitSec.value,
+      points: { easy: f.p_easy.value, medium: f.p_medium.value, hard: f.p_hard.value },
+      streakBonus: f.streakBonus.value, streakCap: f.streakCap.value, maxAttempts: f.maxAttempts.value,
+      open: f.open.checked, showExplanation: f.showExplanation.checked,
+    };
+    try { await api('PUT', 'settings', data); toast('Settings saved'); loadSettings(); } catch (ex) { toast(ex.message); }
+  });
+
+  if (token) enter();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2B0710">
+  <title>Arivu Quiz · Kerala NGO Union</title>
+  <meta name="description" content="Play the Kerala NGO Union quiz: 10 questions, beat the clock, climb the Kerala leaderboard.">
+  <meta property="og:title" content="Arivu Quiz · Kerala NGO Union">
+  <meta property="og:description" content="10 questions. Beat the clock. Climb the Kerala leaderboard.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+Chettan+2:wght@400;500;600;700;800&family=Big+Shoulders+Display:wght@700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <canvas id="confetti" aria-hidden="true"></canvas>
+  <button id="soundBtn" class="sound" type="button" aria-label="Sound on" aria-pressed="true">
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="mute" d="M16 9l6 6M22 9l-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+
+  <main id="app" class="app">
+
+    <!-- 1. Splash -->
+    <section id="screen-splash" class="screen splash is-active" aria-labelledby="gameTitle">
+      <div class="flagpole" aria-hidden="true">
+        <svg class="flag" viewBox="0 0 220 140" preserveAspectRatio="none"><path class="flag-cloth" d="M0 10 C40 0 70 22 110 12 S180 0 220 12 L220 122 C180 112 150 134 110 124 S40 112 0 130 Z"/></svg>
+      </div>
+      <p class="org" id="orgName">Kerala NGO Union, State Committee</p>
+      <h1 class="game-title" id="gameTitle"><span>Arivu</span><span>Quiz</span></h1>
+      <p class="tagline" id="tagline">Know your rights. Serve the people.</p>
+      <ul class="values" id="values" aria-label="Our values"></ul>
+      <div class="splash-stats" id="splashStats" hidden></div>
+      <div class="splash-actions">
+        <button class="btn btn-brass btn-big" id="playBtn" type="button">Play now</button>
+        <button class="btn btn-text" id="switchUserBtn" type="button" hidden>Not you? Change player</button>
+        <button class="btn btn-text" id="boardBtn" type="button">See the leaderboard</button>
+      </div>
+    </section>
+
+    <!-- 2. Register -->
+    <section id="screen-register" class="screen" aria-labelledby="regTitle">
+      <header class="screen-head">
+        <button class="back" type="button" data-go="splash" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <h2 id="regTitle">Your player card</h2>
+      </header>
+      <form id="regForm" class="card player-card" novalidate>
+        <div class="avatar" id="avatar" aria-hidden="true">?</div>
+        <label class="field">
+          <span>Name</span>
+          <input name="name" autocomplete="name" maxlength="80" required placeholder="As you want it on the leaderboard">
+        </label>
+        <label class="field">
+          <span>Office</span>
+          <input name="office" autocomplete="organization" maxlength="120" required placeholder="e.g. PHC Kallara, Collectorate Kollam">
+        </label>
+        <label class="field">
+          <span>District</span>
+          <select name="district" required><option value="">Choose your district</option></select>
+        </label>
+        <label class="field">
+          <span>Mobile number</span>
+          <div class="phone"><span class="cc">+91</span><input name="phone" inputmode="numeric" autocomplete="tel-national" maxlength="10" required placeholder="10-digit mobile"></div>
+          <small>Used only to identify you on the leaderboard. Never shown publicly.</small>
+        </label>
+        <p class="form-error" id="regError" role="alert"></p>
+        <button class="btn btn-brass btn-big" type="submit" id="regSubmit">Save and continue</button>
+      </form>
+    </section>
+
+    <!-- 3. Rules -->
+    <section id="screen-rules" class="screen" aria-labelledby="rulesTitle">
+      <header class="screen-head">
+        <button class="back" type="button" data-go="splash" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <h2 id="rulesTitle">How to play</h2>
+      </header>
+      <div class="card rules-card">
+        <p class="welcome" id="welcomeLine">Welcome, comrade.</p>
+        <ol class="rules">
+          <li><b id="ruleCount">10 questions</b>, marching from easy to hard.</li>
+          <li><b id="ruleTime">20 seconds</b> on the clock for each one. Tap an answer before it runs out.</li>
+          <li><b>Answer fast, score more.</b> Every right answer earns its level points plus a speed bonus for the seconds left.</li>
+          <li><b>Keep a streak.</b> Two or more right in a row adds a streak bonus.</li>
+          <li><b>Your best game counts.</b> Ties go to the faster player.</li>
+        </ol>
+        <div class="points-table" id="pointsTable"></div>
+        <p class="example" id="ruleExample"></p>
+      </div>
+      <button class="btn btn-brass btn-big" id="startBtn" type="button">I'm ready, start</button>
+    </section>
+
+    <!-- 4. Question -->
+    <section id="screen-quiz" class="screen quiz" aria-live="polite">
+      <div class="hud">
+        <ol class="march" id="march" aria-label="Progress"></ol>
+        <div class="hud-row">
+          <div class="score-box"><span class="label">Score</span><span class="score" id="hudScore">0</span></div>
+          <div class="timer" id="timer" role="timer" aria-label="Time left">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="t-track" cx="60" cy="60" r="52"/>
+              <circle class="t-ring" id="timerRing" cx="60" cy="60" r="52"/>
+            </svg>
+            <span id="timerText">20</span>
+          </div>
+          <div class="streak" id="streak" aria-label="Streak"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-6 1-9.5z" fill="currentColor"/></svg><span id="streakNum">0</span></div>
+        </div>
+      </div>
+      <div class="q-meta"><span class="level" id="qLevel">Easy</span><span id="qNum">Question 1 of 10</span></div>
+      <h2 class="question" id="qText"></h2>
+      <div class="options" id="options" role="group" aria-labelledby="qText"></div>
+      <div class="feedback" id="feedback" hidden>
+        <p class="fb-points" id="fbPoints"></p>
+        <p class="fb-line" id="fbLine"></p>
+        <p class="fb-explain" id="fbExplain"></p>
+        <button class="btn btn-brass next-btn" id="nextBtn" type="button"><span class="fill"></span><span class="lbl">Next question</span></button>
+      </div>
+    </section>
+
+    <!-- 5. Results -->
+    <section id="screen-result" class="screen result" aria-labelledby="resTitle">
+      <p class="badge" id="resBadge">Union Star</p>
+      <h2 id="resTitle" class="sr-only">Your result</h2>
+      <p class="final-score"><span id="resScore">0</span><small>points</small></p>
+      <ol class="answer-dots" id="resDots" aria-label="Your answers"></ol>
+      <dl class="res-stats">
+        <div><dt>Correct</dt><dd id="resCorrect">0/10</dd></div>
+        <div><dt>Time</dt><dd id="resTime">0s</dd></div>
+        <div><dt>Best streak</dt><dd id="resStreak">0</dd></div>
+      </dl>
+      <div class="rank-card card" id="rankCard">
+        <p class="rank-big">#<span id="resRank">–</span></p>
+        <p class="rank-line" id="resRankLine"></p>
+        <p class="rank-pb" id="resPB" hidden>New personal best</p>
+      </div>
+      <div class="board-wrap">
+        <div class="tabs" role="tablist">
+          <button role="tab" class="tab is-on" id="tabAll" aria-selected="true" type="button">All Kerala</button>
+          <button role="tab" class="tab" id="tabDistrict" aria-selected="false" type="button">My district</button>
+        </div>
+        <div id="board" class="board"></div>
+      </div>
+      <div class="res-actions">
+        <button class="btn btn-brass btn-big" id="againBtn" type="button">Play again</button>
+        <button class="btn btn-ghost" id="shareBtn" type="button">Challenge a colleague</button>
+      </div>
+    </section>
+
+    <!-- Leaderboard only (from splash) -->
+    <section id="screen-board" class="screen" aria-labelledby="boardTitle">
+      <header class="screen-head">
+        <button class="back" type="button" data-go="splash" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <h2 id="boardTitle">Leaderboard</h2>
+      </header>
+      <label class="field field-dark"><span class="sr-only">District</span>
+        <select id="boardDistrict"><option value="">All Kerala</option></select>
+      </label>
+      <div id="board2" class="board"></div>
+    </section>
+  </main>
+
+  <!-- Overlays -->
+  <div class="overlay" id="countdown" hidden><span id="countNum">3</span></div>
+  <div class="overlay level-up" id="levelUp" hidden>
+    <p class="lu-level" id="luLevel">Medium</p>
+    <p class="lu-line" id="luLine">150 points per question</p>
+  </div>
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

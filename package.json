@@ -1,0 +1,21 @@
+{
+  "name": "ngo-union-quiz",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "seed:build": "node scripts/build-seed.mjs",
+    "test": "node scripts/test-api.mjs",
+    "local": "node scripts/local-server.mjs"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0",
+    "esbuild": "^0.25.0",
+    "@electric-sql/pglite": "^0.3.0"
+  }
+}

@@ -1,0 +1,24 @@
+name = "ngo-union-quiz"
+main = "src/index.js"
+compatibility_date = "2026-06-01"
+
+# Game frontend (index.html, app.js, style.css …)
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# admin.html is bundled into the Worker, so it is never a public file
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+[vars]
+# The hidden admin page lives at https://<your-domain>/<ADMIN_PATH>
+# Change this to something only your team knows.
+ADMIN_PATH = "union-control-room"
+
+# Secrets — set with:  npx wrangler secret put <NAME>
+#   DATABASE_URL    Neon connection string (postgresql://…?sslmode=require)
+#   APP_SECRET      any random string, 32+ characters (signs player and admin tokens)
+#   ADMIN_PASSWORD  password for the admin page

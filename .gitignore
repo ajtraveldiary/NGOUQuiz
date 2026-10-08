@@ -1,0 +1,7 @@
+node_modules/
+.wrangler/
+.wrangler-dry/
+.test-build/
+.dev.vars
+dist/
+.DS_Store
