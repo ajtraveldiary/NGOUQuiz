@@ -3,6 +3,9 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.4.2
+- Smaller emblem on the flag, with space on every side
+
 ## 1.4.1
 - Kerala NGO Union torch emblem on the waving flag on the opening screen (`public/logo.png`)
 
