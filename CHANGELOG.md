@@ -3,6 +3,9 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.7.2
+- Opening screen: the "days to go" number counts up from 0, like the stats
+
 ## 1.7.1
 - Opening screen stats are fixed text in the page: "0 employees have played so far / Top score 0." Only the numbers change, counting up once the data arrives ("You’re #N" is added for a player on the board). No saved copy on the phone any more
 
