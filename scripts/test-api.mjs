@@ -48,7 +48,7 @@ async function playGame(player, strategy) {
   for (let i = 0; i < st.total; i++) {
     const q = ok(await call('POST', '/api/game/next', { playerKey: key, gameId: st.gameId }), 'next');
     assert.equal(q.index, i);
-    assert.ok(q.remainingMs > 15000, 'timer starts near full');
+    assert.ok(q.remainingMs > 13000 && q.remainingMs <= 15000, 'timer starts at 15s');
     assert.ok(!('correct_index' in q) && !('correctChoice' in q), 'answer must not leak');
     levels.push(q.difficulty);
     // refresh-safe: asking again returns the same question

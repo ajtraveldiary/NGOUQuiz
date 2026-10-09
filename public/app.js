@@ -131,7 +131,7 @@
     $('#soundBtn').setAttribute('aria-pressed', String(Sound.on));
     $('#soundBtn').setAttribute('aria-label', Sound.on ? 'Sound on' : 'Sound off');
     try { S.cfg = await API.config(); } catch (e) { toast(e.message); S.cfg = null; }
-    const c = S.cfg || { title: 'Arivu Quiz', values: [], districts: [], totalQuestions: 10, timeLimitSec: 20, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
+    const c = S.cfg || { title: 'Arivu Quiz', values: [], districts: [], totalQuestions: 10, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
     S.total = c.totalQuestions;
     const words = String(c.title).trim().split(/\s+/);
     const first = words.length > 1 ? words.slice(0, Math.ceil(words.length / 2)).join(' ') : words[0];
@@ -195,7 +195,7 @@
 
   // ---------- rules ----------
   function openRules(returning) {
-    const c = S.cfg || {}, p = c.points || { easy: 100, medium: 150, hard: 200 }, t = c.timeLimitSec || 20;
+    const c = S.cfg || {}, p = c.points || { easy: 100, medium: 150, hard: 200 }, t = c.timeLimitSec || 15;
     const first = (S.me?.player?.name || '').split(' ')[0];
     $('#welcomeLine').textContent = first ? (returning ? `Welcome back, ${first}.` : `Welcome, ${first}.`) : 'Welcome.';
     $('#ruleCount').textContent = `${c.totalQuestions || 10} questions`;

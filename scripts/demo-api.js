@@ -3,7 +3,7 @@
 (() => {
   const S = { title: 'Arivu Quiz', subtitle: 'Kerala NGO Union, State Committee', tagline: 'Know your rights. Serve the people.',
     values: ['Solidarity', 'Democracy', 'Secularism', 'People-centred public service'],
-    easy: 4, medium: 4, hard: 2, timeLimitSec: 20, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
+    easy: 4, medium: 4, hard: 2, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
   const DISTRICTS = ['Thiruvananthapuram', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam',
     'Thrissur', 'Palakkad', 'Malappuram', 'Kozhikode', 'Wayanad', 'Kannur', 'Kasaragod'];
   const names = ['Sreeja R', 'Anil Kumar P', 'Fathima N', 'Rajesh V', 'Deepa Mol', 'Shibu Thomas', 'Lekha S', 'Nisar K', 'Bindu G', 'Vinod M',

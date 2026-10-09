@@ -15,7 +15,7 @@ export const DEFAULT_SETTINGS = {
   tagline: 'Know your rights. Serve the people.',
   values: ['Solidarity', 'Democracy', 'Secularism', 'People-centred public service'],
   easy: 4, medium: 4, hard: 2,
-  timeLimitSec: 20,
+  timeLimitSec: 15,
   points: { easy: 100, medium: 150, hard: 200 },
   streakBonus: 25,
   streakCap: 100,
