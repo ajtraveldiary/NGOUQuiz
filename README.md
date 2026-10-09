@@ -10,6 +10,7 @@ Mobile-first quiz game on **Cloudflare Workers + Neon Postgres**.
   - Streak bonus: +25 for each answer in a row after the first, capped at +100
   - Wrong answer: negative marks (easy −25, medium −40, hard −50, editable in Settings). A game score never goes below 0
   - Skip button or time out: 0, no marks lost
+  - Skip takes two taps (the first shows "Tap again to skip") and stays locked for a moment as each question appears, so it isn't pressed by accident
   - Wrong, skipped or timed out: the streak resets and the right answer is shown in green
 - Timing is measured **on the server**, so the score can't be faked from the browser. Refreshing the page doesn't reset the clock.
 - Leaderboard ranks each player's **best** game; ties go to the faster total time. Kerala-wide and per-district boards.
