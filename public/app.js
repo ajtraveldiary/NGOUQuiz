@@ -173,7 +173,7 @@
     if (c.version) $('#appVersion').textContent = 'v' + c.version;
     if (c.open === false) { $('#playBtn').disabled = true; $('#playBtn').textContent = 'Quiz is closed for now'; }
     renderSplashPlayer();
-    API.board('', S.me?.playerKey).then((b) => {
+    const board = API.board('', S.me?.playerKey).then((b) => {
       const lines = [];
       if (b.plays) lines.push(`<b>${fmt(b.plays)}</b> play${b.plays === 1 ? '' : 's'} so far`);
       if (b.total) lines.push(`<b>${fmt(b.total)}</b> employees on the board. Top score <b>${fmt(b.top[0]?.score)}</b>` +
@@ -182,6 +182,18 @@
       const el = $('#splashStats'); el.hidden = false;
       el.innerHTML = lines.join('<br>');
     }).catch(() => {});
+    // Once the opening screen has fully loaded (images, fonts, play count), bring "Play now" into view
+    const loaded = new Promise((ok) => (document.readyState === 'complete' ? ok() : addEventListener('load', ok, { once: true })));
+    Promise.all([loaded, document.fonts?.ready, board]).then(() => setTimeout(scrollToPlay, 300));
+  }
+  // Don't move the page if the player has already scrolled or tapped
+  let touched = false;
+  ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach((ev) => addEventListener(ev, () => { touched = true; }, { once: true, passive: true }));
+  function scrollToPlay() {
+    if (touched || !$('#screen-splash').classList.contains('is-active')) return;
+    const r = $('#playBtn').getBoundingClientRect();
+    if (r.top >= 0 && r.bottom <= innerHeight - 12) return; // already in view
+    $('#playBtn').scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
   }
   function renderSplashPlayer() {
     const name = S.me?.player?.name;
