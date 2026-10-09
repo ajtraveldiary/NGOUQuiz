@@ -237,9 +237,15 @@ assert.equal(players.total, 1);
 const detail = ok(await call('GET', '/api/admin/players/' + players.players[0].id, undefined, A), 'player');
 assert.equal(detail.games.length, 2);
 assert.equal(detail.answers.length, 22); // 2 games × 11 questions
+const lb1 = ok(await call('GET', '/api/leaderboard'), 'board');
+assert.ok(lb1.plays >= stats.totals.finished, 'plays include every game');
+assert.ok(!('plays' in lb), 'district board has no play count');
 ok(await call('POST', `/api/admin/games/${again.st.gameId}/void`, {}, A), 'void');
 const lb2 = ok(await call('GET', '/api/leaderboard'), 'board after void');
 assert.equal(lb2.top.find((x) => x.name === 'Biju K').score, 0);
+assert.equal(lb2.plays, lb1.plays - 1, 'voided game is not a play');
+ok(await call('POST', '/api/register', { name: 'Card Only', office: 'DHS', district: 'Kottayam', phone: '9000000099' }), 'register only');
+assert.equal(ok(await call('GET', '/api/leaderboard'), 'board').plays, lb1.plays, 'filling the player card counts as a play');
 ok(await call('POST', `/api/admin/games/${again.st.gameId}/restore`, {}, A), 'restore');
 const csv = await call('GET', '/api/admin/export?type=leaderboard', undefined, A);
 assert.ok(csv.body.includes('Anu Mohan') && csv.body.includes('9876543210'));

@@ -280,7 +280,14 @@ async function leaderboard(d, district, playerId) {
     rank: x.rank, score: x.score, timeMs: x.total_ms, correct: x.correct_count,
     name: x.name, office: x.office, district: x.district, area: x.area || null, isMe: x.player_id === playerId,
   });
-  return { top: top.map(map), me: map(me), total: totalRow[0]?.n || 0 };
+  return { top: top.map(map), me: map(me), total: totalRow[0]?.n || 0, ...(district ? {} : { plays: await playCount(d) }) };
+}
+// Every game started counts as a play (voided games don't), and so does filling in the player card:
+// a player who registered but never started a game counts once
+async function playCount(d) {
+  const r = await d.q(`SELECT (SELECT count(*) FROM games WHERE status <> 'void')
+    + (SELECT count(*) FROM players p WHERE NOT EXISTS (SELECT 1 FROM games g WHERE g.player_id = p.id AND g.status <> 'void')) AS n`);
+  return Number(r[0]?.n) || 0;
 }
 
 // ---------- public API ----------
