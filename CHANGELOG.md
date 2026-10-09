@@ -3,6 +3,15 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.0 — Secretariat Valayal campaign
+- Opening screen: countdown ticket for the Secretariat Valayal (Saturday, 21 November 2026, Thiruvananthapuram); new tagline
+- Results: campaign card with the 7 demands; share text invites colleagues to join on 21 November
+- Bonus question: after the 10 regular questions, one question about the Secretariat Valayal programme (never more than one per game); a wrong bonus answer loses no marks
+- Question mix per game: 6 Political, 1 Constitution, 2 KSR & Govt rules, 1 General political (editable percentages in Settings); difficulty stays 4 easy, 4 medium, 2 hard
+- 171 new Malayalam questions: 95 from the Action Council brochure (21 about the programme, 74 background), 26 Constitution, 27 KSR & Kerala government rules, 23 General political (LDF government achievements). Pool: 232 questions
+- Admin: campaign settings (name, date, place, message, demands), bonus switch, question mix, bonus flag and filter for questions
+- New questions are added to an existing database automatically, once
+
 ## 1.5.1
 - All 61 starter questions are in the Political category (questions already in the database are updated automatically)
 

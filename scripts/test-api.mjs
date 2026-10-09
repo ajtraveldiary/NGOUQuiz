@@ -39,6 +39,8 @@ const ok = (r, label) => { if (r.status !== 200) { console.error(label, r); proc
 // config
 const cfg = ok(await call('GET', '/api/config'), 'config');
 assert.equal(cfg.totalQuestions, 10);
+assert.equal(cfg.bonusQuestion, true);
+assert.equal(cfg.campaign.date, '2026-11-21');
 assert.equal(cfg.subtitle, 'Kerala NGO Union');
 assert.equal(cfg.version, JSON.parse(readFileSync(root + 'package.json', 'utf8')).version);
 assert.equal(cfg.districts.length, 15);
@@ -96,13 +98,20 @@ async function cheatCorrect(i, q, key, gameId) {
   return g.option_orders[i].indexOf(qq.correct_index);
 }
 const p1 = await playGame({ name: 'Anu Mohan', office: 'DHS Thiruvananthapuram', district: 'Thiruvananthapuram North', phone: '+91 98765 43210' }, cheatCorrect);
-assert.deepEqual(p1.levels, ['easy', 'easy', 'easy', 'easy', 'medium', 'medium', 'medium', 'medium', 'hard', 'hard']);
-assert.equal(p1.res.correct, 10);
-assert.equal(p1.res.bestStreak, 10);
+assert.deepEqual(p1.levels.slice(0, 10), ['easy', 'easy', 'easy', 'easy', 'medium', 'medium', 'medium', 'medium', 'hard', 'hard']);
+assert.equal(p1.levels.length, 11, '10 regular questions + 1 bonus');
+const p1Game = (await pg.query('SELECT question_ids FROM games WHERE id = $1', [p1.st.gameId])).rows[0];
+const p1Flags = (await pg.query('SELECT id, campaign FROM questions WHERE id = ANY($1::int[])', [p1Game.question_ids])).rows;
+const isCampaign = Object.fromEntries(p1Flags.map((r) => [r.id, r.campaign]));
+assert.deepEqual(p1Game.question_ids.map((id) => isCampaign[id]), [...Array(10).fill(false), true], 'only the last question is about the programme');
+assert.equal(p1.res.answers[10].bonus, true);
+assert.equal(p1.res.correct, 11);
+assert.equal(p1.res.bestStreak, 11);
 assert.equal(p1.res.overall.me.rank, 1);
 assert.ok(p1.res.personalBest);
 // max score: base*2 per question (instant) + streak bonus 25,50,75,100,100…
-const expected = 4 * 200 + 4 * 300 + 2 * 400 + (0 + 25 + 50 + 75 + 100 * 6);
+const PTS = { easy: 100, medium: 150, hard: 200 };
+const expected = p1.levels.reduce((t, l, i) => t + 2 * PTS[l] + Math.min(100, 25 * i), 0);
 assert.equal(p1.res.score, expected, `score ${p1.res.score} vs ${expected}`);
 console.log('✓ perfect game score', p1.res.score);
 
@@ -123,7 +132,7 @@ const p3 = await playGame({ name: 'Cicily', office: 'PHC Kottayam', district: 'K
   const right = await cheatCorrect(i, q, key, gameId);
   return i % 2 === 0 ? right : (right + 1) % q.options.length;
 });
-assert.equal(p3.res.correct, 5);
+assert.equal(p3.res.correct, 6); // 11 questions, every other one right
 assert.equal(p3.res.overall.me.rank, 2);
 assert.equal(p3.res.overall.total, 3);
 console.log('✓ half-right game score', p3.res.score, 'rank', p3.res.overall.me.rank);
@@ -148,15 +157,31 @@ console.log('✓ half-right game score', p3.res.score, 'rank', p3.res.overall.me
   assert.equal(a1.score, a0.points - 25);
   const a2 = await ans(2, 'skip');                               // skip: 0, no penalty
   assert.equal(a2.skipped, true); assert.equal(a2.points, 0); assert.equal(a2.score, a1.score); assert.equal(a2.timedOut, false);
-  for (let i = 3; i < 10; i++) await ans(i, ((await peek(i)) + 1) % 4); // all wrong: score floors at 0
+  let last;
+  for (let i = 3; i < st.total; i++) last = await ans(i, ((await peek(i)) + 1) % 4); // all wrong: score floors at 0
+  assert.equal(last.bonus, true); assert.equal(last.wrong, true); assert.equal(last.points, 0); assert.equal(last.fullPenalty, 0);
   const res = ok(await call('POST', '/api/game/result', { playerKey: reg.playerKey, gameId: st.gameId }), 'res4');
   assert.equal(res.score, 0);
-  assert.equal(res.wrong, 8); assert.equal(res.skipped, 1); assert.equal(res.correct, 1);
+  assert.equal(res.wrong, 9); assert.equal(res.skipped, 1); assert.equal(res.correct, 1);
   assert.equal(res.marksLost, a0.points);
   assert.deepEqual(res.answers.slice(0, 3).map((a) => a.state), ['right', 'wrong', 'skipped']);
   assert.equal((await pg.query('SELECT count(*)::int AS n FROM answers WHERE game_id = $1 AND skipped', [st.gameId])).rows[0].n, 1);
-  assert.equal((await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st.gameId, index: 9, choice: 'nope' })).status, 409);
-  console.log('✓ negative marks, skip without penalty, score never below zero');
+  assert.equal((await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st.gameId, index: 10, choice: 'nope' })).status, 409);
+  console.log('✓ negative marks, skip without penalty, score never below zero, wrong bonus costs nothing');
+  // a correct bonus answer earns points: check with a fresh game answered right only on the bonus
+  const st2 = ok(await call('POST', '/api/game/start', { playerKey: reg.playerKey }), 'start4b');
+  const peek2 = async (i) => {
+    const g = (await pg.query('SELECT question_ids, option_orders FROM games WHERE id = $1', [st2.gameId])).rows[0];
+    const qq = (await pg.query('SELECT correct_index FROM questions WHERE id = $1', [g.question_ids[i]])).rows[0];
+    return g.option_orders[i].indexOf(qq.correct_index);
+  };
+  let b;
+  for (let i = 0; i < st2.total; i++) {
+    const nx = ok(await call('POST', '/api/game/next', { playerKey: reg.playerKey, gameId: st2.gameId }), 'next4b');
+    assert.equal(!!nx.bonus, i === st2.total - 1);
+    b = ok(await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st2.gameId, index: i, choice: i === st2.total - 1 ? await peek2(i) : 'skip' }), 'ans4b');
+  }
+  assert.equal(b.bonus, true); assert.equal(b.correct, true); assert.ok(b.points > 0); assert.equal(b.done, true);
 }
 
 // Same phone registers again → same player, replay; best score counts once on board
@@ -186,7 +211,7 @@ assert.equal(page.status, 200);
 assert.equal(page.headers.get('x-robots-tag'), 'noindex, nofollow');
 const stats = ok(await call('GET', '/api/admin/stats', undefined, A), 'stats');
 assert.equal(stats.totals.players, 4);
-assert.equal(stats.totals.finished, 5);
+assert.equal(stats.totals.finished, 6);
 const qs = ok(await call('GET', '/api/admin/questions', undefined, A), 'questions');
 assert.equal(qs.questions.length, POOL.length);
 assert.ok(qs.questions.every((q) => /[\u0D00-\u0D7F]/.test(q.question)), 'pool is Malayalam');
@@ -205,7 +230,7 @@ const players = ok(await call('GET', '/api/admin/players?q=biju', undefined, A),
 assert.equal(players.total, 1);
 const detail = ok(await call('GET', '/api/admin/players/' + players.players[0].id, undefined, A), 'player');
 assert.equal(detail.games.length, 2);
-assert.equal(detail.answers.length, 20);
+assert.equal(detail.answers.length, 22); // 2 games × 11 questions
 ok(await call('POST', `/api/admin/games/${again.st.gameId}/void`, {}, A), 'void');
 const lb2 = ok(await call('GET', '/api/leaderboard'), 'board after void');
 assert.equal(lb2.top.find((x) => x.name === 'Biju K').score, 0);
@@ -238,19 +263,30 @@ console.log('✓ areas: rename updates players, filter, stats, export, delete');
 // ---- question picking: never two questions with the same topic in one game ----
 {
   const { pickQuestions } = await import(root + '.test-build/worker.mjs?pick');
-  const pool = POOL.map((q, i) => ({ id: i + 1, difficulty: q.difficulty, topic: q.topic }));
+  const pool = POOL.map((q, i) => ({ id: i + 1, difficulty: q.difficulty, category: q.category, topic: q.topic, campaign: !!q.campaign }));
+  const MIX = [{ name: 'Political', percent: 60 }, { name: 'Constitution', percent: 10 }, { name: 'KSR & Govt rules', percent: 20 }, { name: 'General political', percent: 10 }];
   for (let g = 0; g < 300; g++) {
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    const ids = pickQuestions(shuffled, { easy: 4, medium: 4, hard: 2 });
-    assert.equal(ids.length, 10);
+    const ids = pickQuestions(shuffled, { easy: 4, medium: 4, hard: 2, bonusQuestion: true, categoryMix: MIX });
+    assert.equal(ids.length, 11);
     const qs = ids.map((id) => pool[id - 1]);
-    assert.equal(new Set(qs.map((q) => q.topic)).size, 10, 'topics repeat in a game');
-    assert.deepEqual(qs.map((q) => q.difficulty), ['easy', 'easy', 'easy', 'easy', 'medium', 'medium', 'medium', 'medium', 'hard', 'hard']);
+    assert.equal(new Set(qs.map((q) => q.topic)).size, 11, 'topics repeat in a game');
+    assert.deepEqual(qs.slice(0, 10).map((q) => q.difficulty), ['easy', 'easy', 'easy', 'easy', 'medium', 'medium', 'medium', 'medium', 'hard', 'hard']);
+    assert.deepEqual(qs.map((q) => q.campaign), [...Array(10).fill(false), true], 'exactly one programme question, as the bonus');
+    const byCat = qs.slice(0, 10).reduce((m, q) => ((m[q.category] = (m[q.category] || 0) + 1), m), {});
+    assert.deepEqual(byCat, { Political: 6, Constitution: 1, 'KSR & Govt rules': 2, 'General political': 1 }, JSON.stringify(byCat));
+    const off = pickQuestions(shuffled, { easy: 4, medium: 4, hard: 2, bonusQuestion: false }).map((id) => pool[id - 1]);
+    assert.equal(off.length, 10); assert.ok(off.every((q) => !q.campaign), 'no programme questions when the bonus is off');
   }
   // a tiny pool still produces a full game (topics may repeat only when unavoidable)
   const tiny = [{ id: 1, difficulty: 'easy', topic: 'a' }, { id: 2, difficulty: 'easy', topic: 'a' }, { id: 3, difficulty: 'hard', topic: 'b' }];
   assert.equal(pickQuestions(tiny, { easy: 2, medium: 0, hard: 1 }).length, 3);
-  console.log('✓ 300 random games: 4 easy, 4 medium, 2 hard, no repeated topic');
+  // quota arithmetic
+  const { categoryQuotas } = await import(root + '.test-build/worker.mjs?quota');
+  assert.deepEqual(categoryQuotas(MIX, 10).map((x) => x.n), [6, 1, 2, 1]);
+  assert.equal(categoryQuotas([{ name: 'A', percent: 50 }, { name: 'B', percent: 50 }], 5).reduce((t, x) => t + x.n, 0), 5);
+  assert.equal(categoryQuotas([{ name: 'A', percent: 30 }], 10)[0].n, 3);
+  console.log('✓ 300 random games: 6 Political, 1 Constitution, 2 KSR, 1 General political; 4 easy, 4 medium, 2 hard; + 1 programme bonus; no repeated topic');
 }
 
 // ---- automatic database setup ----
@@ -300,6 +336,20 @@ await race.query(`UPDATE settings SET value = '5'::jsonb WHERE key = 'schema_ver
 await callEnv({ ...env, __db: mkDb(race) }, 'GET', '/api/health');
 assert.equal((await race.query(`SELECT count(*)::int AS n FROM questions WHERE category = 'Political'`)).rows[0].n, POOL.length);
 assert.equal((await race.query(`SELECT category FROM questions WHERE question = 'അഡ്മിൻ ചോദ്യം?'`)).rows[0].category, 'GK');
+// a v6 database (first 61 questions only) gets the Secretariat Valayal questions once, no duplicates
+{
+  const v6 = new PGlite(); await v6.exec(readFileSync(root + 'db/schema.sql', 'utf8'));
+  const first = POOL.filter((q) => !q.batch);
+  for (const q of first) {
+    await v6.query(`INSERT INTO questions (question, options, correct_index, difficulty, category, topic) VALUES ($1, $2::jsonb, $3, $4, 'Political', $5)`,
+      [q.question, JSON.stringify(q.options), q.correct, q.difficulty, q.topic]);
+  }
+  await v6.query(`INSERT INTO settings (key, value) VALUES ('schema_version', '6'::jsonb)`);
+  await callEnv({ ...env, __db: mkDb(v6) }, 'GET', '/api/health');
+  await callEnv({ ...env, __db: mkDb(v6) }, 'GET', '/api/health');
+  assert.equal((await v6.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
+  assert.equal((await v6.query('SELECT count(*)::int AS n FROM questions WHERE campaign')).rows[0].n, POOL.filter((q) => q.campaign).length);
+}
 // 3. clear messages for configuration mistakes
 const noUrl = { APP_SECRET: env.APP_SECRET, ADMIN_PASSWORD: 'x' };
 assert.match((await callEnv(noUrl, 'GET', '/api/config')).body.error, /DATABASE_URL is not set/);

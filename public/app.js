@@ -126,6 +126,38 @@
     timer: { raf: 0, end: 0, lastSec: null }, nextT: 0, result: null,
   };
 
+  // ---------- campaign (Secretariat Valayal) ----------
+  const IST = 5.5 * 3600e3;
+  function campaignWhen(c) {
+    if (!c || !/^\d{4}-\d{2}-\d{2}$/.test(c.date || '')) return null;
+    const target = Date.parse(c.date + 'T00:00:00+05:30');
+    const today = Date.parse(new Date(Date.now() + IST).toISOString().slice(0, 10) + 'T00:00:00+05:30');
+    const days = Math.round((target - today) / 864e5);
+    const part = (o) => new Date(target).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', ...o });
+    const long = `${part({ weekday: 'long' })}, ${part({ day: 'numeric', month: 'long', year: 'numeric' })}`;
+    const short = new Date(target).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' });
+    return { days, long, short };
+  }
+  function renderCampaign() {
+    const c = S.cfg?.campaign, w = campaignWhen(c);
+    $('#campaignTicket').hidden = !c || !w;
+    $('#campCard').hidden = !c || !w;
+    if (!c || !w) return;
+    const big = w.days > 1 ? String(w.days) : w.days === 1 ? '1' : w.days === 0 ? 'Today' : '✓';
+    const unit = w.days > 1 ? 'days to go' : w.days === 1 ? 'day to go' : w.days === 0 ? 'Join us' : 'Held';
+    $('#tkBig').textContent = big; $('#tkUnit').textContent = unit;
+    $('#tkBig').style.fontSize = big.length > 3 ? '30px' : '';
+    $('#tkNameMl').textContent = c.nameMl || c.name;
+    $('#tkMeta').textContent = [w.long, c.place].filter(Boolean).join(', ');
+    $('#campKicker').textContent = w.days > 0 ? `See you on ${w.short}. ${w.days} day${w.days === 1 ? '' : 's'} to go.` : w.days === 0 ? 'It is today. Join us.' : `Held on ${w.short}.`;
+    $('#campTitle').textContent = c.nameMl || c.name;
+    $('#campMeta').textContent = [c.nameMl ? c.name : '', w.long, c.place].filter(Boolean).join(', ');
+    $('#campLine').textContent = [c.line, c.organiser ? `Called by the ${c.organiser}.` : ''].filter(Boolean).join(' ');
+    $('#campSummary').textContent = `Why we march: ${c.demands?.length || 0} demands`;
+    $('#campDemands').innerHTML = (c.demands || []).map((d) => `<li>${esc(d)}</li>`).join('');
+    $('#campCard').querySelector('details').hidden = !(c.demands || []).length;
+  }
+
   // ---------- splash ----------
   async function boot() {
     $('#soundBtn').setAttribute('aria-pressed', String(Sound.on));
@@ -141,6 +173,7 @@
     if (c.subtitle) $('#orgName').textContent = c.subtitle;
     if (c.tagline) $('#tagline').textContent = c.tagline;
     $('#values').innerHTML = (c.values || []).map((v) => `<li>${esc(v)}</li>`).join('');
+    renderCampaign();
     const opts = (c.districts || []).map((d) => `<option>${esc(d)}</option>`).join('');
     $('#regForm [name=district]').insertAdjacentHTML('beforeend', opts);
     $('#boardDistrict').insertAdjacentHTML('beforeend', opts);
@@ -208,7 +241,9 @@
     const c = S.cfg || {}, p = c.points || { easy: 100, medium: 150, hard: 200 }, t = c.timeLimitSec || 15;
     const first = (S.me?.player?.name || '').split(' ')[0];
     $('#welcomeLine').textContent = first ? (returning ? `Welcome back, ${first}.` : `Welcome, ${first}.`) : 'Welcome.';
-    $('#ruleCount').textContent = `${c.totalQuestions || 10} questions`;
+    $('#ruleCount').textContent = `${c.totalQuestions || 10} questions` + (c.bonusQuestion ? ' plus a bonus' : '');
+    $('#ruleBonus').hidden = !c.bonusQuestion;
+    if (c.campaign) $('#ruleBonusName').textContent = c.campaign.name;
     $('#ruleTime').textContent = `${t} seconds`;
     const pen = c.penalty || { easy: 0, medium: 0, hard: 0 };
     const negative = ['easy', 'medium', 'hard'].some((l) => pen[l] > 0);
@@ -231,7 +266,8 @@
     try {
       const g = await API.start(S.me.playerKey);
       S.gameId = g.gameId; S.total = g.total; S.score = 0; S.streak = 0; S.lastLevel = null;
-      $('#march').innerHTML = Array.from({ length: g.total }, () => '<li></li>').join('');
+      const bonusSlot = S.cfg?.bonusQuestion && g.total > (S.cfg?.totalQuestions || 10);
+      $('#march').innerHTML = Array.from({ length: g.total }, (_, i) => `<li${bonusSlot && i === g.total - 1 ? ' class="bonus-slot" title="Bonus question"' : ''}></li>`).join('');
       $('#hudScore').textContent = '0'; setStreak(0);
       show('quiz');
       $('#qText').textContent = ''; $('#options').innerHTML = ''; $('#feedback').hidden = true;
@@ -263,20 +299,32 @@
     ov.hidden = true;
   }
 
+  async function bonusIntro() {
+    const ov = $('#levelUp'), l = $('#luLevel'), c = S.cfg?.campaign;
+    l.textContent = 'Bonus'; l.className = 'lu-level bonus';
+    $('#luLine').textContent = `One more on the ${c?.name || 'campaign'}. No marks lost if wrong.`;
+    ov.hidden = false; Sound.fanfare();
+    await wait(1700);
+    ov.hidden = true;
+  }
+
   async function loadNext() {
     clearTimeout(S.nextT);
     let q;
     try { q = await API.next(S.me.playerKey, S.gameId); }
     catch (e) { toast(e.message); $('#feedback').hidden = false; $('#nextBtn .lbl').textContent = 'Try again'; return; }
     if (q.done) return finish();
-    if (S.lastLevel && q.difficulty !== S.lastLevel) await levelUp(q.difficulty);
-    S.lastLevel = q.difficulty;
+    if (q.bonus) await bonusIntro();
+    else if (S.lastLevel && q.difficulty !== S.lastLevel) await levelUp(q.difficulty);
+    if (!q.bonus) S.lastLevel = q.difficulty;
     S.q = q; S.answered = false;
     S.score = q.score; $('#hudScore').textContent = fmt(q.score); setStreak(q.streak);
     const march = $('#march').children;
     for (let i = 0; i < march.length; i++) march[i].classList.toggle('now', i === q.index);
-    const lv = $('#qLevel'); lv.textContent = `${LEVEL_NAME[q.difficulty]} · ${q.points} pts`; lv.className = 'level ' + q.difficulty;
-    $('#qNum').textContent = `Question ${q.index + 1} of ${q.total}`;
+    const lv = $('#qLevel');
+    lv.textContent = q.bonus ? `Bonus · ${q.points} pts` : `${LEVEL_NAME[q.difficulty]} · ${q.points} pts`;
+    lv.className = 'level ' + (q.bonus ? 'bonus' : q.difficulty);
+    $('#qNum').textContent = q.bonus ? 'Bonus question' : `Question ${q.index + 1} of ${q.total - (S.cfg?.bonusQuestion && q.total > (S.cfg?.totalQuestions || 10) ? 1 : 0)}`;
     const qt = $('#qText'); qt.textContent = q.question; qt.classList.remove('in', 'long', 'xlong'); void qt.offsetWidth;
     qt.classList.add('in'); if (q.question.length > 150) qt.classList.add('xlong'); else if (q.question.length > 95) qt.classList.add('long');
     $('#options').classList.toggle('long', q.options.some((o) => o.length > 60));
@@ -351,7 +399,7 @@
       Sound.bad(); buzz([70, 40, 70]);
       pts.className = 'fb-points minus';
       pts.textContent = r.penalty ? '−' + fmt(r.penalty) : 'Not quite';
-      const lost = r.penalty ? `Wrong answer, ${r.penalty} marks lost.` : r.fullPenalty ? 'Wrong answer. Your score is already at zero.' : 'Wrong answer.';
+      const lost = r.bonus ? 'No marks lost on the bonus question.' : r.penalty ? `Wrong answer, ${r.penalty} marks lost.` : r.fullPenalty ? 'Wrong answer. Your score is already at zero.' : 'Wrong answer.';
       line.textContent = lost + (S.streak >= 2 ? ` Streak of ${S.streak} ends here.` : ' The right answer is in green.');
     } else {
       right.classList.add('right');
@@ -409,6 +457,7 @@
     const dot = { right: ['ok', '✓', 'right'], wrong: ['no', '✕', 'wrong'], skipped: ['skip', '–', 'skipped'], timeout: ['skip', '–', 'time ran out'] };
     $('#resDots').innerHTML = r.answers.map((a, i) => {
       const [cls, mark, label] = dot[a.state] || (a.correct ? dot.right : dot.wrong);
+      if (a.bonus) return `<li class="bonus${a.correct ? '' : ' miss'}" style="animation-delay:${0.2 + i * 0.06}s" title="Bonus question: ${label}">${a.correct ? '★' : '☆'}</li>`;
       return `<li class="${cls}" style="animation-delay:${0.2 + i * 0.06}s" title="Question ${i + 1}: ${label}">${mark}</li>`;
     }).join('');
     const notes = [];
@@ -428,6 +477,7 @@
     const pb = $('#resPB');
     pb.hidden = !me || (r.personalBest && !r.score);
     if (me) pb.textContent = r.personalBest ? 'Your best game so far' : `Your best stays ${fmt(me.score)}`;
+    renderCampaign();
     setTab('all');
     const again = $('#againBtn');
     if (r.attemptsLeft === 0) { again.disabled = true; again.textContent = 'No attempts left'; }
@@ -469,9 +519,11 @@
   }
   async function share() {
     const r = S.result, c = S.cfg || {};
+    const w = campaignWhen(c.campaign);
+    const join = c.campaign && w && w.days >= 0 ? ` Know the facts and join the ${c.campaign.name} on ${w.short}!` : '';
     const text = r
-      ? `I scored ${fmt(r.score)} in ${c.title || 'the quiz'} (${r.correct}/${r.total} right${r.overall.me ? `, #${r.overall.me.rank} in Kerala` : ''}). Can you beat me?`
-      : `Play ${c.title || 'the quiz'}!`;
+      ? `I scored ${fmt(r.score)} in ${c.title || 'the quiz'} (${r.correct}/${r.total} right${r.overall.me ? `, #${r.overall.me.rank} in Kerala` : ''}). Can you beat me?${join}`
+      : `Play ${c.title || 'the quiz'}!${join}`;
     const url = location.origin + '/';
     if (navigator.share) { try { await navigator.share({ title: c.title, text, url }); return; } catch (e) { if (e.name === 'AbortError') return; } }
     open('https://wa.me/?text=' + encodeURIComponent(text + ' ' + url), '_blank', 'noopener');

@@ -1,9 +1,15 @@
 /* In-browser stand-in for the Worker API, used only by the shareable demo build.
    Mirrors the server's game rules; QUESTIONS is injected by build-demo.mjs. */
 (() => {
-  const S = { title: 'Arivu Quiz', subtitle: 'Kerala NGO Union', tagline: 'Know your rights. Serve the people.',
+  const S = { title: 'Arivu Quiz', subtitle: 'Kerala NGO Union', tagline: 'Know the facts. Defend our rights.',
     values: ['Solidarity', 'Democracy', 'Secularism', 'People-centred public service'],
-    easy: 4, medium: 4, hard: 2, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, penalty: { easy: 25, medium: 40, hard: 50 }, streakBonus: 25, streakCap: 100 };
+    easy: 4, medium: 4, hard: 2, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, penalty: { easy: 25, medium: 40, hard: 50 }, streakBonus: 25, streakCap: 100,
+    campaign: { show: true, name: 'Secretariat Valayal', nameMl: 'സെക്രട്ടേറിയറ്റ് വളയൽ', date: '2026-11-21', place: 'Thiruvananthapuram',
+      organiser: 'Action Council of State Employees & Teachers',
+      line: 'Over 25,000 employees and teachers will encircle the Secretariat to protect the rights we have won.',
+      demands: ['Implement the pay revision now; grant interim relief', 'Withdraw NPS and restore the old pension; repeal the PFRDA Act',
+        'Implement the DA arrears order without delay', 'Restore earned leave surrender', 'Cancel unfair transfers; hold general transfers as per norms',
+        'Fix the shortcomings in MEDISEP', 'Drop moves that weaken education and the civil service'] } };
   const DISTRICTS = ['Thiruvananthapuram North', 'Thiruvananthapuram South', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam',
     'Thrissur', 'Palakkad', 'Malappuram', 'Kozhikode', 'Wayanad', 'Kannur', 'Kasaragod'];
   const names = ['Sreeja R', 'Anil Kumar P', 'Fathima N', 'Rajesh V', 'Deepa Mol', 'Shibu Thomas', 'Lekha S', 'Nisar K', 'Bindu G', 'Vinod M',
@@ -28,15 +34,19 @@
     return { top: all.slice(0, 10), me: all.find((x) => x.isMe) || null, total: all.length };
   }
   window.QUIZ_API = {
-    config: () => delay({ ...S, version: typeof APP_VERSION === 'string' ? APP_VERSION : undefined, districts: DISTRICTS, areas: AREAS, levels: { easy: 4, medium: 4, hard: 2 }, totalQuestions: 10, maxAttempts: 0, open: true }),
+    config: () => delay({ ...S, version: typeof APP_VERSION === 'string' ? APP_VERSION : undefined, districts: DISTRICTS, areas: AREAS, levels: { easy: 4, medium: 4, hard: 2 }, totalQuestions: 10, bonusQuestion: true, maxAttempts: 0, open: true }),
     register: (p) => { me = { ...(me || {}), ...p }; return delay({ playerKey: 'demo', player: p, returning: false, played: 0, best: null }); },
     start: () => {
-      const used = new Set(), out = { easy: [], medium: [], hard: [] }, pool = shuffle(QUESTIONS);
-      for (const l of ['hard', 'medium', 'easy']) for (const q of pool) {
-        if (out[l].length >= S[l]) break;
-        if (q.difficulty === l && !used.has(q.topic)) { used.add(q.topic); out[l].push(q); }
+      // same rule as the server: 6 Political, 1 Constitution, 2 KSR & Govt rules, 1 General political; 4 easy, 4 medium, 2 hard
+      const need = { easy: S.easy, medium: S.medium, hard: S.hard }, used = new Set(), chosen = [], pool = shuffle(QUESTIONS.filter((q) => !q.campaign));
+      const best = (c) => c.reduce((b, q) => (need[q.difficulty] > need[b.difficulty] ? q : b), c[0]);
+      const take = (q) => { chosen.push(q); used.add(q.topic); need[q.difficulty]--; };
+      for (const [cat, n] of [['Constitution', 1], ['General political', 1], ['KSR & Govt rules', 2], ['Political', 6]]) {
+        for (let k = 0; k < n; k++) { const c = pool.filter((q) => q.category === cat && !used.has(q.topic)); if (c.length) take(best(c)); }
       }
-      const qs = [...out.easy, ...out.medium, ...out.hard];
+      const rank = { easy: 0, medium: 1, hard: 2 };
+      const bonus = shuffle(QUESTIONS.filter((q) => q.campaign))[0];
+      const qs = [...chosen.sort((a, b) => rank[a.difficulty] - rank[b.difficulty]), ...(bonus ? [bonus] : [])];
       game = { qs, orders: qs.map((q) => shuffle(q.options.map((_, i) => i))), i: 0, served: null, score: 0, streak: 0, best: 0, correct: 0, ms: 0, answers: [] };
       return delay({ gameId: 'demo', total: qs.length, index: 0 });
     },
@@ -44,7 +54,7 @@
       if (game.i >= game.qs.length) return delay({ done: true });
       if (!game.served) game.served = Date.now();
       const q = game.qs[game.i], lim = S.timeLimitSec * 1000;
-      return delay({ done: false, index: game.i, total: game.qs.length, question: q.question, difficulty: q.difficulty, category: q.category,
+      return delay({ done: false, index: game.i, total: game.qs.length, question: q.question, difficulty: q.difficulty, category: q.category, bonus: !!q.campaign,
         options: game.orders[game.i].map((k) => q.options[k]), points: S.points[q.difficulty], limitMs: lim,
         remainingMs: Math.max(0, lim - (Date.now() - game.served)), score: game.score, streak: game.streak });
     },
@@ -56,13 +66,14 @@
       const base = ok ? S.points[q.difficulty] : 0, speed = ok ? Math.round(base * (lim - t) / lim) : 0;
       game.streak = ok ? game.streak + 1 : 0; game.best = Math.max(game.best, game.streak);
       const st = ok && game.streak >= 2 ? Math.min(S.streakCap, S.streakBonus * (game.streak - 1)) : 0;
-      const penalty = wrong ? Math.min(S.penalty[q.difficulty], game.score) : 0;
+      const isBonus = !!q.campaign;
+      const penalty = wrong && !isBonus ? Math.min(S.penalty[q.difficulty], game.score) : 0;
       const pts = ok ? base + speed + st : -penalty;
       const state = ok ? 'right' : wrong ? 'wrong' : skipped ? 'skipped' : 'timeout';
-      game.score += pts; game.correct += ok ? 1 : 0; game.ms += t; game.answers.push({ correct: ok, points: pts, state });
+      game.score += pts; game.correct += ok ? 1 : 0; game.ms += t; game.answers.push({ correct: ok, points: pts, state, bonus: isBonus });
       game.i++; game.served = null;
       const done = game.i >= game.qs.length;
-      return delay({ correct: ok, wrong, skipped, timedOut: choice === null, penalty, fullPenalty: wrong ? S.penalty[q.difficulty] : 0, correctChoice: order.indexOf(q.correct), points: pts,
+      return delay({ correct: ok, wrong, skipped, bonus: isBonus, timedOut: choice === null, penalty, fullPenalty: wrong && !isBonus ? S.penalty[q.difficulty] : 0, correctChoice: order.indexOf(q.correct), points: pts,
         breakdown: { base, speed, streak: st }, timeMs: t, score: game.score, streak: game.streak, done, explanation: q.explanation });
     },
     result: () => {

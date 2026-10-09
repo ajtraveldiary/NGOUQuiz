@@ -81,6 +81,7 @@ h3 { margin: 0 0 10px; font-size: 16px; }
 .lvl.easy { background: #CDEFD9; color: var(--leaf-deep); }
 .lvl.medium { background: #FBE6B8; color: #8A5E00; }
 .lvl.hard { background: #FBD0D2; color: var(--red-deep); }
+.lvl.bonus { background: var(--red); color: #fff; }
 
 /* tables */
 .table-wrap { overflow-x: auto; }
@@ -195,6 +196,7 @@ pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size:
         <input type="search" id="qSearch" placeholder="Search questions">
         <select id="qLevel"><option value="">All levels</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
         <select id="qActive"><option value="">Active and hidden</option><option value="1">Active only</option><option value="0">Hidden only</option></select>
+        <select id="qKind"><option value="">All questions</option><option value="regular">Regular</option><option value="bonus">Bonus (campaign)</option></select>
         <span class="grow legend" id="qCount"></span>
         <button class="btn ghost" id="importBtn">Import CSV</button>
         <button class="btn brass" id="addQ">Add question</button>
@@ -232,7 +234,7 @@ pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size:
     <section data-view="settings" hidden>
       <h2>Game settings</h2>
       <form class="panel grid" id="setForm" style="max-width:720px">
-        <h3>Campaign</h3>
+        <h3>Quiz identity</h3>
         <div class="row2">
           <label>Quiz title <input name="title" maxlength="60"></label>
           <label>Organisation line <input name="subtitle" maxlength="100"></label>
@@ -258,6 +260,22 @@ pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size:
         </div>
         <label class="check"><input type="checkbox" name="open"> Quiz is open for new games</label>
         <label class="check"><input type="checkbox" name="showExplanation"> Show the explanation after each answer</label>
+        <label class="check"><input type="checkbox" name="bonusQuestion"> Bonus question after the last regular question</label>
+        <p class="hint" style="margin-top:-6px">One question marked "Bonus question about the campaign" is asked at the end of each game. A wrong bonus answer loses no marks. These questions never appear among the regular ones.</p>
+        <label>Question mix for the regular questions (one per line: Category = percent)
+          <textarea name="categoryMix" rows="5" placeholder="Political = 60"></textarea></label>
+        <p class="hint" style="margin-top:-6px">Names must match the questions' Category. With 10 questions, 60% = 6 questions. Difficulty levels are matched as closely as the pool allows; any shortfall is filled from other questions.</p>
+        <h3>Campaign</h3>
+        <label class="check"><input type="checkbox" name="c_show"> Show the campaign countdown and card</label>
+        <div class="row2">
+          <label>Campaign name (English) <input name="c_name" maxlength="60"></label>
+          <label>Campaign name (Malayalam) <input name="c_nameMl" maxlength="80"></label>
+          <label>Date <input name="c_date" type="date"></label>
+          <label>Place <input name="c_place" maxlength="60"></label>
+        </div>
+        <label>Called by <input name="c_organiser" maxlength="100"></label>
+        <label>One-line message <input name="c_line" maxlength="200"></label>
+        <label>Demands (one per line) <textarea name="c_demands" rows="7"></textarea></label>
         <p class="hint">Changes apply to games started after you save. Games already in progress keep their rules.</p>
         <div class="foot"><button class="btn brass" type="submit">Save settings</button></div>
       </form>
@@ -289,6 +307,7 @@ pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size:
       <span class="hint" style="font-weight:400">Give rephrased versions of the same fact the same tag. Questions with the same tag never appear in the same game.</span></label>
     <datalist id="topics"></datalist>
     <label>Explanation shown after answering (optional) <textarea name="explanation" maxlength="600"></textarea></label>
+    <label class="check"><input type="checkbox" name="campaign"> Bonus question about the campaign (asked once, at the end of a game)</label>
     <label class="check"><input type="checkbox" name="active" checked> Active (can appear in games)</label>
     <p class="err" id="qErr"></p>
     <div class="foot"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn brass" type="submit">Save question</button></div>
@@ -299,7 +318,7 @@ pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size:
 <div class="modal" id="impModal" hidden>
   <div class="box">
     <h2 style="margin:0">Import questions</h2>
-    <p class="hint">Upload a CSV with a header row. Columns: <b>difficulty</b> (easy / medium / hard), <b>category</b>, <b>topic</b> (optional tag), <b>question</b>, <b>option_a</b> to <b>option_f</b> (at least two), <b>correct</b> (letter A–F), <b>explanation</b>. Malayalam text works; save the file as CSV UTF-8.</p>
+    <p class="hint">Upload a CSV with a header row. Columns: <b>difficulty</b> (easy / medium / hard), <b>category</b>, <b>topic</b> (optional tag), <b>campaign</b> (yes = bonus question about the campaign), <b>question</b>, <b>option_a</b> to <b>option_f</b> (at least two), <b>correct</b> (letter A–F), <b>explanation</b>. Malayalam text works; save the file as CSV UTF-8.</p>
     <pre class="sample">difficulty,category,topic,question,option_a,option_b,option_c,option_d,correct,explanation
 easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബല്യത്തിൽ വന്നത് ഏത് തീയതി മുതൽ?,01-01-2013,01-04-2013,01-07-2013,01-01-2014,B,01-04-2013 മുതൽ.</pre>
     <input type="file" id="impFile" accept=".csv,text/csv">
@@ -464,15 +483,19 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     renderQuestions();
   }
   function renderQuestions() {
-    const s = $('#qSearch').value.trim().toLowerCase(), l = $('#qLevel').value, a = $('#qActive').value;
+    const s = $('#qSearch').value.trim().toLowerCase(), l = $('#qLevel').value, a = $('#qActive').value, k = $('#qKind').value;
     const list = questions.filter((q) => (!l || q.difficulty === l) && (!a || String(+q.active) === a) &&
+      (!k || (k === 'bonus') === !!q.campaign) &&
       (!s || q.question.toLowerCase().includes(s) || (q.category || '').toLowerCase().includes(s) || (q.topic || '').toLowerCase().includes(s) || q.options.some((o) => o.toLowerCase().includes(s))));
-    const counts = ['easy', 'medium', 'hard'].map((lv) => `${questions.filter((q) => q.active && q.difficulty === lv).length} ${lv}`).join(', ');
+    const counts = ['easy', 'medium', 'hard'].map((lv) => `${questions.filter((q) => q.active && !q.campaign && q.difficulty === lv).length} ${lv}`).join(', ')
+      + `, ${questions.filter((q) => q.active && q.campaign).length} bonus. By category: `
+      + Object.entries(questions.filter((q) => q.active && !q.campaign).reduce((m, q) => ((m[q.category || 'None'] = (m[q.category || 'None'] || 0) + 1), m), {}))
+        .map(([k, v]) => `${k} ${v}`).join(', ');
     $('#qCount').textContent = `Showing ${list.length} of ${questions.length}. Active: ${counts}.`;
     $('#qList').innerHTML = list.map((q) => `
       <article class="q${q.active ? '' : ' off'}">
         <div>
-          <div class="meta"><span class="lvl ${q.difficulty}">${q.difficulty}</span>${q.category ? `<span>${esc(q.category)}</span>` : ''}${q.topic ? `<span title="Topic tag">#${esc(q.topic)}</span>` : ''}
+          <div class="meta"><span class="lvl ${q.difficulty}">${q.difficulty}</span>${q.category ? `<span>${esc(q.category)}</span>` : ''}${q.topic ? `<span title="Topic tag">#${esc(q.topic)}</span>` : ''}${q.campaign ? '<span class="lvl bonus">bonus</span>' : ''}
             <span>${q.attempts ? `${fmt(q.attempts)} answers, <span class="acc${q.accuracy < 35 ? ' low' : ''}">${q.accuracy}% right</span>${q.skipped ? `, ${fmt(q.skipped)} skipped` : ''}, avg ${(q.avg_ms / 1000).toFixed(1)}s` : 'Not answered yet'}</span>
             ${q.active ? '' : '<b>Hidden</b>'}</div>
           <div class="qt">${esc(q.question)}</div>
@@ -485,7 +508,7 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
         </div>
       </article>`).join('') || '<p class="hint">No questions match.</p>';
   }
-  ['#qSearch', '#qLevel', '#qActive'].forEach((s) => $(s).addEventListener('input', renderQuestions));
+  ['#qSearch', '#qLevel', '#qActive', '#qKind'].forEach((s) => $(s).addEventListener('input', renderQuestions));
   $('#qList').addEventListener('click', async (e) => {
     const b = e.target.closest('button'); if (!b) return;
     const id = Number(b.dataset.edit || b.dataset.toggle || b.dataset.del);
@@ -516,7 +539,7 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     $('#optRows').innerHTML = '';
     (q ? q.options : ['', '', '', '']).forEach((o, i) => optRow(o, q ? i === q.correct_index : false));
     f.question.value = q?.question || ''; f.difficulty.value = q?.difficulty || 'easy';
-    f.category.value = q?.category || ''; f.topic.value = q?.topic || ''; f.explanation.value = q?.explanation || ''; f.active.checked = q ? q.active : true;
+    f.category.value = q?.category || ''; f.topic.value = q?.topic || ''; f.explanation.value = q?.explanation || ''; f.active.checked = q ? q.active : true; f.campaign.checked = !!q?.campaign;
     $('#qModal').hidden = false; f.question.focus();
   }
   $('#addQ').addEventListener('click', () => openEditor(null));
@@ -527,7 +550,7 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     const data = {
       question: f.question.value, options: rows.map((r) => r.querySelector('.opt').value.trim()),
       correct_index: rows.findIndex((r) => r.querySelector('[type=radio]').checked),
-      difficulty: f.difficulty.value, category: f.category.value, topic: f.topic.value, explanation: f.explanation.value, active: f.active.checked,
+      difficulty: f.difficulty.value, category: f.category.value, topic: f.topic.value, explanation: f.explanation.value, active: f.active.checked, campaign: f.campaign.checked,
     };
     if (data.correct_index < 0) { $('#qErr').textContent = 'Select the right answer with the round button.'; return; }
     try {
@@ -570,7 +593,7 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
       const d = (r[col('difficulty')] || '').trim().toLowerCase();
       if (!r[col('question')]?.trim() || opts.length < 2 || ci < 0 || ci >= opts.length || !['easy', 'medium', 'hard'].includes(d)) { problems.push(n + 2); return; }
       pending.push({ question: r[col('question')].trim(), options: opts, correct: ci, difficulty: d,
-        category: col('category') >= 0 ? r[col('category')] : '', topic: col('topic') >= 0 ? r[col('topic')] : '', explanation: col('explanation') >= 0 ? r[col('explanation')] : '' });
+        category: col('category') >= 0 ? r[col('category')] : '', topic: col('topic') >= 0 ? r[col('topic')] : '', campaign: col('campaign') >= 0 ? r[col('campaign')] : '', explanation: col('explanation') >= 0 ? r[col('explanation')] : '' });
     });
     const by = ['easy', 'medium', 'hard'].map((l) => `${pending.filter((p) => p.difficulty === l).length} ${l}`).join(', ');
     $('#impPreview').innerHTML = `Ready to import <b>${pending.length}</b> questions (${by}).` + (problems.length ? `<br>Skipping rows ${problems.slice(0, 15).join(', ')}${problems.length > 15 ? '…' : ''}: missing question, options, level or a valid answer letter.` : '');
@@ -718,7 +741,12 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     f.values.value = (s.values || []).join('\n');
     f.p_easy.value = s.points.easy; f.p_medium.value = s.points.medium; f.p_hard.value = s.points.hard;
     f.n_easy.value = s.penalty.easy; f.n_medium.value = s.penalty.medium; f.n_hard.value = s.penalty.hard;
-    f.open.checked = s.open; f.showExplanation.checked = s.showExplanation;
+    f.open.checked = s.open; f.showExplanation.checked = s.showExplanation; f.bonusQuestion.checked = s.bonusQuestion !== false;
+    f.categoryMix.value = (s.categoryMix || []).map((m) => `${m.name} = ${m.percent}`).join('\n');
+    const c = s.campaign || {};
+    f.c_show.checked = !!c.show; f.c_name.value = c.name || ''; f.c_nameMl.value = c.nameMl || ''; f.c_date.value = c.date || '';
+    f.c_place.value = c.place || ''; f.c_organiser.value = c.organiser || ''; f.c_line.value = c.line || '';
+    f.c_demands.value = (c.demands || []).join('\n');
   }
   $('#setForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -730,7 +758,13 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
       points: { easy: f.p_easy.value, medium: f.p_medium.value, hard: f.p_hard.value },
       penalty: { easy: f.n_easy.value, medium: f.n_medium.value, hard: f.n_hard.value },
       streakBonus: f.streakBonus.value, streakCap: f.streakCap.value, maxAttempts: f.maxAttempts.value,
-      open: f.open.checked, showExplanation: f.showExplanation.checked,
+      open: f.open.checked, showExplanation: f.showExplanation.checked, bonusQuestion: f.bonusQuestion.checked,
+      categoryMix: f.categoryMix.value.split('\n').map((l) => l.match(/^\s*(.+?)\s*[=:]\s*(\d+)\s*%?\s*$/)).filter(Boolean)
+        .map((m) => ({ name: m[1], percent: Number(m[2]) })),
+      campaign: {
+        show: f.c_show.checked, name: f.c_name.value, nameMl: f.c_nameMl.value, date: f.c_date.value, place: f.c_place.value,
+        organiser: f.c_organiser.value, line: f.c_line.value, demands: f.c_demands.value.split('\n').map((v) => v.trim()).filter(Boolean),
+      },
     };
     try { await api('PUT', 'settings', data); toast('Settings saved'); loadSettings(); } catch (ex) { toast(ex.message); }
   });

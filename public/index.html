@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#2B0710">
   <title>Arivu Quiz · Kerala NGO Union</title>
-  <meta name="description" content="Play the Kerala NGO Union quiz: 10 questions, beat the clock, climb the Kerala leaderboard.">
+  <meta name="description" content="Kerala NGO Union quiz for the Secretariat Valayal, 21 November 2026. Know the facts, beat the clock, climb the Kerala leaderboard.">
   <meta property="og:title" content="Arivu Quiz · Kerala NGO Union">
-  <meta property="og:description" content="10 questions. Beat the clock. Climb the Kerala leaderboard.">
+  <meta property="og:description" content="Know the facts. Join the Secretariat Valayal on 21 November 2026.">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -33,6 +33,13 @@
       <p class="org" id="orgName">Kerala NGO Union</p>
       <h1 class="game-title" id="gameTitle"><span>Arivu</span><span>Quiz</span></h1>
       <p class="tagline" id="tagline">Know your rights. Serve the people.</p>
+      <div class="ticket" id="campaignTicket" hidden>
+        <div class="ticket-count"><b id="tkBig">43</b><span id="tkUnit">days to go</span></div>
+        <div class="ticket-body">
+          <p class="ticket-ml" id="tkNameMl" lang="ml"></p>
+          <p class="ticket-meta" id="tkMeta"></p>
+        </div>
+      </div>
       <ul class="values" id="values" aria-label="Our values"></ul>
       <div class="splash-stats" id="splashStats" hidden></div>
       <div class="splash-actions">
@@ -94,6 +101,7 @@
           <li><b id="ruleTime">15 seconds</b> on the clock for each one. Tap an answer before it runs out.</li>
           <li><b>Answer fast, score more.</b> Every right answer earns its level points plus a speed bonus for the seconds left.</li>
           <li id="ruleNegative"><b>Wrong answers cost marks.</b> Not sure? Tap <b>Skip</b> to move on without losing any. Running out of time costs nothing either.</li>
+          <li id="ruleBonus" hidden><b>Bonus question</b> after the last one, on the <span id="ruleBonusName">Secretariat Valayal</span>. Extra points if right, and a wrong answer costs nothing.</li>
           <li><b>Keep a streak.</b> Two or more right in a row adds a streak bonus.</li>
           <li><b>Your best game counts.</b> Ties go to the faster player.</li>
         </ol>
@@ -148,6 +156,16 @@
         <p class="rank-line" id="resRankLine"></p>
         <p class="rank-pb" id="resPB" hidden>New personal best</p>
       </div>
+      <section class="camp card" id="campCard" hidden aria-labelledby="campTitle">
+        <p class="camp-kicker" id="campKicker">See you on 21 November</p>
+        <h3 id="campTitle" lang="ml"></h3>
+        <p class="camp-meta" id="campMeta"></p>
+        <p class="camp-line" id="campLine"></p>
+        <details class="camp-demands">
+          <summary id="campSummary">Why we march</summary>
+          <ol id="campDemands"></ol>
+        </details>
+      </section>
       <div class="board-wrap">
         <div class="tabs" role="tablist">
           <button role="tab" class="tab is-on" id="tabAll" aria-selected="true" type="button">All Kerala</button>

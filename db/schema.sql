@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS questions (
   difficulty     TEXT NOT NULL CHECK (difficulty IN ('easy','medium','hard')),
   category       TEXT,
   topic          TEXT,                        -- questions sharing a topic never appear in the same game
+  campaign       BOOLEAN NOT NULL DEFAULT false, -- about the campaign programme: one per game, at the campaign slot
   explanation    TEXT,                        -- shown after answering
   active         BOOLEAN NOT NULL DEFAULT true,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -85,3 +86,4 @@ ALTER TABLE answers ADD COLUMN IF NOT EXISTS skipped BOOLEAN NOT NULL DEFAULT fa
 UPDATE settings SET value = jsonb_set(value, '{subtitle}', '"Kerala NGO Union"')
   WHERE key = 'game' AND value->>'subtitle' = 'Kerala NGO Union, State Committee';
 ALTER TABLE questions ADD COLUMN IF NOT EXISTS topic TEXT;
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS campaign BOOLEAN NOT NULL DEFAULT false;

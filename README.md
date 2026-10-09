@@ -23,7 +23,7 @@ public/            game frontend (served as static assets)
 src/index.js       Worker: API + admin routes
 src/admin.html     admin page (bundled into the Worker, not a public file)
 db/schema.sql      tables
-db/seed.sql        61 starter questions in Malayalam (24 easy, 27 medium, 10 hard)
+db/seed.sql        232 starter questions in Malayalam (Political, Constitution, KSR & Govt rules, General political; 21 bonus questions on the Secretariat Valayal)
 db/seed-questions.json  same questions as JSON (edit + `npm run seed:build`)
 scripts/           local server, API tests, demo build
 ```
@@ -73,6 +73,13 @@ Use *Settings → Questions CSV* to download the current pool in the same format
 ## Database setup and upgrades are automatic
 
 On its first request the Worker creates any missing tables, upgrades older databases (adds areas, moves "Thiruvananthapuram" players to "Thiruvananthapuram North") and loads the Malayalam starter questions if the pool is empty (version 1.5.0 also replaced the old English questions once). Running `db/schema.sql` by hand is optional.
+
+## Game structure
+
+- 10 regular questions: 6 Political, 1 Constitution, 2 KSR & Govt rules, 1 General political (Settings → Question mix), ordered 4 easy → 4 medium → 2 hard.
+- Then 1 bonus question about the campaign programme (questions ticked "Bonus question about the campaign"). Never more than one per game; a wrong bonus answer loses no marks.
+- Campaign countdown and card (name, date, place, message, demands) are edited under Settings → Campaign.
+- Question sources: `scripts/mix-questions.py` (Constitution, KSR, General political) and `scripts/valayal-questions.py` (brochure) write into `db/seed-questions.json`.
 
 ## Version
 
