@@ -3,6 +3,9 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.12
+- Opening screen: the values row (Solidarity, Democracy, Secularism, People-centred public service) is removed
+
 ## 1.6.11
 - Secretariat Valayal ticket and results card are fixed in the page and show at once with the rest of the opening screen; only the days-to-go countdown is worked out in the browser, with no wait for the database
 - Campaign fields removed from admin Settings

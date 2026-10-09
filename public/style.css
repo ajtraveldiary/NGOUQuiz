@@ -99,8 +99,6 @@ button { cursor: pointer; }
 .splash .game-title span:last-child { animation-delay: .12s; }
 @keyframes rise { from { opacity: 0; transform: translateY(40px) scale(.9); } }
 .tagline { margin: 4px 0 0; font-size: 19px; font-weight: 600; }
-.values { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.values li { padding: 3px 12px; border-radius: 999px; border: 1.5px solid rgba(242, 179, 61, .45); color: var(--mist); font-size: 14px; font-weight: 500; }
 /* campaign ticket: countdown stub + programme name */
 .ticket {
   display: grid; grid-template-columns: auto 1fr; align-items: stretch; text-align: left;
