@@ -23,7 +23,7 @@ public/            game frontend (served as static assets)
 src/index.js       Worker: API + admin routes
 src/admin.html     admin page (bundled into the Worker, not a public file)
 db/schema.sql      tables
-db/seed.sql        36 starter questions (12 per level)
+db/seed.sql        61 starter questions in Malayalam (24 easy, 27 medium, 10 hard)
 db/seed-questions.json  same questions as JSON (edit + `npm run seed:build`)
 scripts/           local server, API tests, demo build
 ```
@@ -72,7 +72,7 @@ Use *Settings → Questions CSV* to download the current pool in the same format
 
 ## Database setup and upgrades are automatic
 
-On its first request the Worker creates any missing tables, upgrades older databases (adds areas, moves "Thiruvananthapuram" players to "Thiruvananthapuram North") and loads the 36 starter questions if the pool is empty. Running `db/schema.sql` by hand is optional.
+On its first request the Worker creates any missing tables, upgrades older databases (adds areas, moves "Thiruvananthapuram" players to "Thiruvananthapuram North") and loads the Malayalam starter questions if the pool is empty (version 1.5.0 also replaced the old English questions once). Running `db/schema.sql` by hand is optional.
 
 ## Version
 
@@ -84,7 +84,7 @@ Open `https://<your-worker>/api/health`. It reports whether the database connect
 
 ## Before launch
 
-- **Review the 36 starter questions** with the union's committee and replace or extend them. A pool of 30+ per level keeps games fresh.
+- **Review the 61 Malayalam starter questions** with the union's committee. Give rephrased versions of one fact the same *topic tag* so they never appear in the same game.
 - Set *Attempts per player* if prizes are involved (e.g. 3).
 - Players are identified by mobile number without OTP. If prizes are significant, verify winners by phone before announcing, and use *Void this game* for any misuse.
 - Add the union areas for each district under *Districts & areas*.

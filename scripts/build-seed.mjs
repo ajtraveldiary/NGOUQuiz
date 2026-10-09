@@ -6,12 +6,12 @@ const qs = JSON.parse(readFileSync(new URL('../db/seed-questions.json', import.m
 const lit = (s) => s == null ? 'NULL' : `'${String(s).replace(/'/g, "''")}'`;
 
 const rows = qs.map((q) =>
-  `(${lit(q.question)}, ${lit(JSON.stringify(q.options))}::jsonb, ${q.correct}, ${lit(q.difficulty)}, ${lit(q.category)}, ${lit(q.explanation)})`
+  `(${lit(q.question)}, ${lit(JSON.stringify(q.options))}::jsonb, ${q.correct}, ${lit(q.difficulty)}, ${lit(q.category)}, ${lit(q.explanation)}, ${lit(q.topic)})`
 );
 
-const sql = `-- Starter question pool (${qs.length} questions). Review and edit from the admin panel.
+const sql = `-- Starter question pool (${qs.length} questions). Optional: the Worker loads these automatically into an empty pool.
 -- Run after schema.sql:  psql "$DATABASE_URL" -f db/seed.sql
-INSERT INTO questions (question, options, correct_index, difficulty, category, explanation) VALUES
+INSERT INTO questions (question, options, correct_index, difficulty, category, explanation, topic) VALUES
 ${rows.join(',\n')};
 `;
 writeFileSync(new URL('../db/seed.sql', import.meta.url), sql);

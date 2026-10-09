@@ -31,8 +31,12 @@
     config: () => delay({ ...S, version: typeof APP_VERSION === 'string' ? APP_VERSION : undefined, districts: DISTRICTS, areas: AREAS, levels: { easy: 4, medium: 4, hard: 2 }, totalQuestions: 10, maxAttempts: 0, open: true }),
     register: (p) => { me = { ...(me || {}), ...p }; return delay({ playerKey: 'demo', player: p, returning: false, played: 0, best: null }); },
     start: () => {
-      const pick = (l, n) => shuffle(QUESTIONS.filter((q) => q.difficulty === l)).slice(0, n);
-      const qs = [...pick('easy', S.easy), ...pick('medium', S.medium), ...pick('hard', S.hard)];
+      const used = new Set(), out = { easy: [], medium: [], hard: [] }, pool = shuffle(QUESTIONS);
+      for (const l of ['hard', 'medium', 'easy']) for (const q of pool) {
+        if (out[l].length >= S[l]) break;
+        if (q.difficulty === l && !used.has(q.topic)) { used.add(q.topic); out[l].push(q); }
+      }
+      const qs = [...out.easy, ...out.medium, ...out.hard];
       game = { qs, orders: qs.map((q) => shuffle(q.options.map((_, i) => i))), i: 0, served: null, score: 0, streak: 0, best: 0, correct: 0, ms: 0, answers: [] };
       return delay({ gameId: 'demo', total: qs.length, index: 0 });
     },

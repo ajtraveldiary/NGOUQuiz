@@ -80,13 +80,17 @@ function db(env) {
     .replace(/^DATABASE_URL\s*=\s*/i, '').replace(/^psql\s+/i, '').replace(/^['"]|['"]$/g, '').trim();
   if (!/^postgres(ql)?:\/\//i.test(url)) fail(500, 'DATABASE_URL looks wrong. It should start with postgresql:// (copy the connection string from Neon, not the psql command).');
   const sql = neon(url);
-  return { q: (text, params = []) => sql.query(text, params) };
+  return {
+    q: (text, params = []) => sql.query(text, params),
+    // several statements in one database transaction
+    tx: (list) => sql.transaction(list.map(([text, params = []]) => sql.query(text, params))),
+  };
 }
 
 // ---------- automatic database setup ----------
 // Creates missing tables, upgrades older databases and loads starter questions into an empty pool.
 // Runs once per Worker instance; afterwards it costs a single quick check.
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 const schemaReady = new Map(); // per database
 function sqlStatements(text) {
   return text.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
@@ -105,15 +109,24 @@ async function ensureSchema(env, d) {
       for (const stmt of sqlStatements(SCHEMA_SQL)) await d.q(stmt);
       const params = [];
       const values = SEED_QUESTIONS.map((q) => {
-        params.push(q.question, JSON.stringify(q.options), q.correct, q.difficulty, q.category || null, q.explanation || null);
+        params.push(q.question, JSON.stringify(q.options), q.correct, q.difficulty, q.category || null, q.explanation || null, q.topic || null);
         const n = params.length;
-        return `($${n - 5}, $${n - 4}::jsonb, $${n - 3}::smallint, $${n - 2}, $${n - 1}, $${n})`;
+        return `($${n - 6}, $${n - 5}::jsonb, $${n - 4}::smallint, $${n - 3}, $${n - 2}, $${n - 1}, $${n})`;
       });
-      await d.q(
-        `INSERT INTO questions (question, options, correct_index, difficulty, category, explanation)
-         SELECT * FROM (VALUES ${values.join(',')}) v WHERE NOT EXISTS (SELECT 1 FROM questions)`, params);
-      await d.q(`INSERT INTO settings (key, value) VALUES ('schema_version', $1::jsonb)
-        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify(SCHEMA_VERSION)]);
+      const version = `(SELECT coalesce(max((value #>> '{}')::int), 0) FROM settings WHERE key = 'schema_version')`;
+      const steps = [
+        // only one Worker instance runs the data steps at a time
+        [`SELECT pg_advisory_xact_lock(7241001)`],
+        // v5: the English starter questions are replaced by the Malayalam question pool
+        [`DELETE FROM questions WHERE ${version} < 5`],
+        // load the starter pool into an empty question table
+        [`INSERT INTO questions (question, options, correct_index, difficulty, category, explanation, topic)
+          SELECT * FROM (VALUES ${values.join(',')}) v WHERE NOT EXISTS (SELECT 1 FROM questions)`, params],
+        [`INSERT INTO settings (key, value) VALUES ('schema_version', $1::jsonb)
+          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify(SCHEMA_VERSION)]],
+      ];
+      if (d.tx) await d.tx(steps);
+      else for (const [t, p] of steps) await d.q(t, p);
     })().catch((e) => { schemaReady.delete(key); throw e; }));
   }
   return schemaReady.get(key);
@@ -257,6 +270,33 @@ async function apiRegister(env, req) {
   });
 }
 
+// Picks the game's questions: the configured number per level, never two questions with the
+// same topic tag (rephrased versions of one fact). Hardest level is filled first because it has
+// the fewest questions; if a level runs short, the gap is filled from other levels.
+export function pickQuestions(pool, s) {
+  const used = new Set(), chosen = new Set();
+  const byLevel = { easy: [], medium: [], hard: [] };
+  const tag = (q) => (q.topic ? 't:' + q.topic.trim().toLowerCase() : 'id:' + q.id);
+  const take = (q) => { used.add(tag(q)); chosen.add(q.id); byLevel[q.difficulty]?.push(q.id); };
+  for (const level of ['hard', 'medium', 'easy']) {
+    let need = s[level] || 0;
+    for (const q of pool) {
+      if (!need) break;
+      if (q.difficulty !== level || chosen.has(q.id) || used.has(tag(q))) continue;
+      take(q); need--;
+    }
+  }
+  const want = (s.easy || 0) + (s.medium || 0) + (s.hard || 0);
+  for (const allowRepeat of [false, true]) {
+    for (const q of pool) {
+      if (chosen.size >= want) break;
+      if (chosen.has(q.id) || (!allowRepeat && used.has(tag(q)))) continue;
+      take(q);
+    }
+  }
+  return [...byLevel.easy, ...byLevel.medium, ...byLevel.hard];
+}
+
 async function apiStart(env, req) {
   const b = await body(req);
   const pid = await verifyPlayer(env, b.playerKey);
@@ -276,25 +316,11 @@ async function apiStart(env, req) {
     if (c[0].n >= s.maxAttempts) fail(403, `You have used all ${s.maxAttempts} attempts. Your best score is on the board.`);
   }
 
-  const picked = [];
-  for (const level of LEVELS) {
-    if (!s[level]) continue;
-    const r = await d.q(
-      `SELECT id FROM questions WHERE active AND difficulty = $1 ORDER BY random() LIMIT $2`, [level, s[level]]);
-    picked.push(...r.map((x) => x.id));
-  }
-  const want = s.easy + s.medium + s.hard;
-  if (picked.length < want) { // fill gaps from any level if one level is short
-    const r = await d.q(
-      `SELECT id FROM questions WHERE active AND NOT (id = ANY($1::int[]))
-       ORDER BY CASE difficulty WHEN 'easy' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, random() LIMIT $2`,
-      [picked, want - picked.length]);
-    picked.push(...r.map((x) => x.id));
-  }
+  const pool = shuffle(await d.q(
+    `SELECT id, difficulty, topic, jsonb_array_length(options)::int AS n FROM questions WHERE active`));
+  const picked = pickQuestions(pool, s);
   if (!picked.length) fail(503, 'No questions are available yet.');
-
-  const lens = await d.q(`SELECT id, jsonb_array_length(options)::int AS n FROM questions WHERE id = ANY($1::int[])`, [picked]);
-  const nById = Object.fromEntries(lens.map((x) => [x.id, x.n]));
+  const nById = Object.fromEntries(pool.map((x) => [x.id, x.n]));
   const orders = picked.map((id) => shuffle([...Array(nById[id]).keys()]));
   const config = { limitMs: s.timeLimitSec * 1000, points: s.points, penalty: s.penalty, streakBonus: s.streakBonus, streakCap: s.streakCap, showExplanation: s.showExplanation };
   const g = await d.q(
@@ -325,6 +351,10 @@ async function apiNext(env, req) {
   }
   const idx = g.current_index;
   const q = (await d.q(`SELECT question, options, difficulty, category FROM questions WHERE id = $1`, [g.question_ids[idx]]))[0];
+  if (!q) { // question was deleted while this game was in progress
+    await d.q(`UPDATE games SET status = 'void', finished_at = now() WHERE id = $1`, [g.id]);
+    fail(409, 'The questions were updated. Start a new game.');
+  }
   const order = g.option_orders[idx];
   const limitMs = g.config.limitMs;
   return json({
@@ -514,13 +544,14 @@ function validateQuestion(b) {
   return {
     question, options, correct, difficulty,
     category: clean(b.category, 60) || null, explanation: String(b.explanation || '').trim().slice(0, 600) || null,
+    topic: clean(b.topic, 60) || null,
     active: b.active !== false,
   };
 }
 
 async function adminQuestions(env) {
   const rows = await db(env).q(`
-    SELECT q.id, q.question, q.options, q.correct_index, q.difficulty, q.category, q.explanation, q.active, q.updated_at,
+    SELECT q.id, q.question, q.options, q.correct_index, q.difficulty, q.category, q.topic, q.explanation, q.active, q.updated_at,
       count(a.question_id)::int AS attempts,
       coalesce(round(100.0 * avg(a.is_correct::int)), 0)::int AS accuracy,
       coalesce(round(avg(a.time_ms)), 0)::int AS avg_ms,
@@ -532,12 +563,12 @@ async function adminQuestions(env) {
 async function adminSaveQuestion(env, req, id) {
   const v = validateQuestion(await body(req));
   const d = db(env);
-  const params = [v.question, JSON.stringify(v.options), v.correct, v.difficulty, v.category, v.explanation, v.active];
+  const params = [v.question, JSON.stringify(v.options), v.correct, v.difficulty, v.category, v.explanation, v.active, v.topic];
   const r = id
     ? await d.q(`UPDATE questions SET question = $1, options = $2::jsonb, correct_index = $3, difficulty = $4, category = $5,
-        explanation = $6, active = $7, updated_at = now() WHERE id = $8 RETURNING id`, [...params, id])
-    : await d.q(`INSERT INTO questions (question, options, correct_index, difficulty, category, explanation, active)
-        VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7) RETURNING id`, params);
+        explanation = $6, active = $7, topic = $8, updated_at = now() WHERE id = $9 RETURNING id`, [...params, id])
+    : await d.q(`INSERT INTO questions (question, options, correct_index, difficulty, category, explanation, active, topic)
+        VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8) RETURNING id`, params);
   if (!r[0]) fail(404, 'Question not found.');
   return json({ id: r[0].id });
 }
@@ -559,11 +590,11 @@ async function adminImport(env, req) {
   const vs = list.map(validateQuestion);
   const params = [];
   const values = vs.map((v) => {
-    params.push(v.question, JSON.stringify(v.options), v.correct, v.difficulty, v.category, v.explanation);
+    params.push(v.question, JSON.stringify(v.options), v.correct, v.difficulty, v.category, v.explanation, v.topic);
     const n = params.length;
-    return `($${n - 5}, $${n - 4}::jsonb, $${n - 3}, $${n - 2}, $${n - 1}, $${n})`;
+    return `($${n - 6}, $${n - 5}::jsonb, $${n - 4}, $${n - 3}, $${n - 2}, $${n - 1}, $${n})`;
   });
-  await db(env).q(`INSERT INTO questions (question, options, correct_index, difficulty, category, explanation) VALUES ${values.join(',')}`, params);
+  await db(env).q(`INSERT INTO questions (question, options, correct_index, difficulty, category, explanation, topic) VALUES ${values.join(',')}`, params);
   return json({ imported: vs.length });
 }
 
@@ -673,11 +704,11 @@ async function adminExport(env, url) {
       FROM games g JOIN players p ON p.id = g.player_id ORDER BY g.started_at DESC`);
     rows = r.map((x) => [x.id, x.name, x.office, x.district, x.area, x.phone, x.status, x.score, x.correct_count, x.wrong, x.skipped, x.lost, x.total, (x.total_ms / 1000).toFixed(1), x.best_streak, x.started_at, x.finished_at]);
   } else if (type === 'questions') {
-    head = ['difficulty', 'category', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'option_f', 'correct', 'explanation', 'active'];
+    head = ['difficulty', 'category', 'topic', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'option_f', 'correct', 'explanation', 'active'];
     const r = await d.q(`SELECT * FROM questions ORDER BY id`);
     rows = r.map((x) => {
       const o = [...x.options, '', '', '', '', '', ''].slice(0, 6);
-      return [x.difficulty, x.category, x.question, ...o, 'ABCDEF'[x.correct_index], x.explanation, x.active];
+      return [x.difficulty, x.category, x.topic, x.question, ...o, 'ABCDEF'[x.correct_index], x.explanation, x.active];
     });
   } else {
     head = ['Name', 'Office', 'District', 'Area', 'Phone', 'Registered', 'Games', 'Best score'];

@@ -3,6 +3,12 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.5.0
+- New Malayalam question pool: 61 questions (24 easy, 27 medium, 10 hard) on NPS, OPS and the employees' pension struggle; the old English questions are removed automatically on first deploy (one time only)
+- Anek Malayalam font for the game and admin page; long questions use a slightly smaller size
+- Topic tags: rephrased versions of the same fact never appear in the same game (editable in the question editor and CSV `topic` column)
+- Sound button scrolls with the page so it no longer covers the streak counter
+
 ## 1.4.3
 - Organisation line now reads "Kerala NGO Union" (saved admin settings are updated automatically)
 

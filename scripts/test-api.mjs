@@ -13,12 +13,18 @@ await build({
 });
 const worker = (await import(root + '.test-build/worker.mjs?' + Date.now())).default;
 
+// database adapter like the Worker's: q() for one statement, tx() for a transaction
+const mkDb = (db) => ({
+  q: async (t, p = []) => (await db.query(t, p)).rows,
+  tx: (list) => db.transaction(async (t) => { const out = []; for (const [q, p = []] of list) out.push((await t.query(q, p)).rows); return out; }),
+});
+const POOL = JSON.parse(readFileSync(root + 'db/seed-questions.json', 'utf8'));
 const pg = new PGlite();
 await pg.exec(readFileSync(root + 'db/schema.sql', 'utf8'));
 await pg.exec(readFileSync(root + 'db/seed.sql', 'utf8'));
 const env = {
   APP_SECRET: 'test-secret-0123456789abcdef', ADMIN_PASSWORD: 'pass123', ADMIN_PATH: 'secret-room',
-  __db: { q: async (t, p = []) => (await pg.query(t, p)).rows },
+  __db: mkDb(pg),
 };
 async function call(method, path, data, headers = {}) {
   const init = { method, headers: { 'content-type': 'application/json', ...headers } };
@@ -182,7 +188,8 @@ const stats = ok(await call('GET', '/api/admin/stats', undefined, A), 'stats');
 assert.equal(stats.totals.players, 4);
 assert.equal(stats.totals.finished, 5);
 const qs = ok(await call('GET', '/api/admin/questions', undefined, A), 'questions');
-assert.equal(qs.questions.length, 36);
+assert.equal(qs.questions.length, POOL.length);
+assert.ok(qs.questions.every((q) => /[\u0D00-\u0D7F]/.test(q.question)), 'pool is Malayalam');
 const created = ok(await call('POST', '/api/admin/questions', { question: 'ചോദ്യം?', options: ['ഒന്ന്', 'രണ്ട്', 'മൂന്ന്'], correct_index: 1, difficulty: 'easy', category: 'Test' }, A), 'create q');
 ok(await call('PUT', '/api/admin/questions/' + created.id, { question: 'ചോദ്യം 2?', options: ['a', 'b'], correct_index: 0, difficulty: 'hard' }, A), 'edit q');
 assert.equal((await call('POST', '/api/admin/questions', { question: 'x', options: ['a'], correct_index: 0, difficulty: 'easy' }, A)).status, 400);
@@ -228,6 +235,24 @@ assert.ok((await call('GET', '/api/admin/export?type=players', undefined, A)).bo
 ok(await call('DELETE', '/api/admin/areas/' + kt.id, undefined, A), 'delete area');
 assert.ok(!ok(await call('GET', '/api/config'), 'cfg3').areas.Kollam.includes('Kottarakara'));
 console.log('✓ areas: rename updates players, filter, stats, export, delete');
+// ---- question picking: never two questions with the same topic in one game ----
+{
+  const { pickQuestions } = await import(root + '.test-build/worker.mjs?pick');
+  const pool = POOL.map((q, i) => ({ id: i + 1, difficulty: q.difficulty, topic: q.topic }));
+  for (let g = 0; g < 300; g++) {
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    const ids = pickQuestions(shuffled, { easy: 4, medium: 4, hard: 2 });
+    assert.equal(ids.length, 10);
+    const qs = ids.map((id) => pool[id - 1]);
+    assert.equal(new Set(qs.map((q) => q.topic)).size, 10, 'topics repeat in a game');
+    assert.deepEqual(qs.map((q) => q.difficulty), ['easy', 'easy', 'easy', 'easy', 'medium', 'medium', 'medium', 'medium', 'hard', 'hard']);
+  }
+  // a tiny pool still produces a full game (topics may repeat only when unavoidable)
+  const tiny = [{ id: 1, difficulty: 'easy', topic: 'a' }, { id: 2, difficulty: 'easy', topic: 'a' }, { id: 3, difficulty: 'hard', topic: 'b' }];
+  assert.equal(pickQuestions(tiny, { easy: 2, medium: 0, hard: 1 }).length, 3);
+  console.log('✓ 300 random games: 4 easy, 4 medium, 2 hard, no repeated topic');
+}
+
 // ---- automatic database setup ----
 async function callEnv(e, method, path) {
   const res = await worker.fetch(new Request('https://quiz.test' + path, { method }), e, {});
@@ -235,14 +260,14 @@ async function callEnv(e, method, path) {
 }
 // 1. brand-new empty database: tables and starter questions are created on first visit
 const fresh = new PGlite();
-const envFresh = { ...env, __db: { q: async (t, p = []) => (await fresh.query(t, p)).rows } };
+const envFresh = { ...env, __db: mkDb(fresh) };
 const c1 = await callEnv(envFresh, 'GET', '/api/config');
 assert.equal(c1.status, 200, JSON.stringify(c1.body));
 assert.equal(c1.body.totalQuestions, 10);
 const h1 = await callEnv(envFresh, 'GET', '/api/health');
-assert.equal(h1.body.ok, true); assert.equal(h1.body.activeQuestions, 36);
+assert.equal(h1.body.ok, true); assert.equal(h1.body.activeQuestions, POOL.length);
 await callEnv(envFresh, 'GET', '/api/health'); // re-running setup must not duplicate questions
-assert.equal((await fresh.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, 36);
+assert.equal((await fresh.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
 // 2. database made with the first version (no areas table, old district name) is upgraded
 const { execSync } = await import('node:child_process');
 const oldSchema = execSync('git show f765cbf:db/schema.sql', { cwd: root }).toString();
@@ -250,11 +275,24 @@ const old = new PGlite();
 await old.exec(oldSchema);
 await old.query(`INSERT INTO players (name, office, district, phone) VALUES ('Old', 'X', 'Thiruvananthapuram', '9999999999')`);
 await old.query(`INSERT INTO settings (key, value) VALUES ('game', '{"subtitle": "Kerala NGO Union, State Committee", "title": "Arivu Quiz"}')`);
-const envOld = { ...env, __db: { q: async (t, p = []) => (await old.query(t, p)).rows } };
+await old.query(`INSERT INTO questions (question, options, correct_index, difficulty) VALUES ('Old English question?', '["a","b"]', 0, 'easy')`);
+const envOld = { ...env, __db: mkDb(old) };
 const c2 = await callEnv(envOld, 'GET', '/api/config');
 assert.equal(c2.status, 200, JSON.stringify(c2.body));
 assert.equal((await old.query('SELECT district FROM players')).rows[0].district, 'Thiruvananthapuram North');
 assert.equal(c2.body.subtitle, 'Kerala NGO Union');
+// existing questions are cleared once and replaced by the Malayalam pool
+assert.equal((await old.query(`SELECT count(*)::int AS n FROM questions WHERE question = 'Old English question?'`)).rows[0].n, 0);
+assert.equal((await old.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
+// after the upgrade, questions added by the admin are never removed again
+await old.query(`INSERT INTO questions (question, options, correct_index, difficulty) VALUES ('പുതിയ ചോദ്യം?', '["a","b"]', 0, 'easy')`);
+await callEnv({ ...envOld, __db: mkDb(old) }, 'GET', '/api/health');
+assert.equal((await old.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length + 1);
+// two Worker instances upgrading at the same moment do not duplicate the pool
+const race = new PGlite(); await race.exec(oldSchema);
+const rEnv1 = { ...env, __db: mkDb(race) }, rEnv2 = { ...env, __db: mkDb(race) };
+await Promise.all([callEnv(rEnv1, 'GET', '/api/config'), callEnv(rEnv2, 'GET', '/api/config')]);
+assert.equal((await race.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
 // 3. clear messages for configuration mistakes
 const noUrl = { APP_SECRET: env.APP_SECRET, ADMIN_PASSWORD: 'x' };
 assert.match((await callEnv(noUrl, 'GET', '/api/config')).body.error, /DATABASE_URL is not set/);

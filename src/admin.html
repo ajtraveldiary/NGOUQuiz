@@ -7,12 +7,12 @@
 <title>Quiz control room</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Baloo+Chettan+2:wght@400;500;600;700&family=Big+Shoulders+Display:wght@800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anek+Malayalam:wght@400;500;600;700&family=Big+Shoulders+Display:wght@800;900&display=swap" rel="stylesheet">
 <style>
 :root {
   --night: #2B0710; --night-2: #3D0B17; --red: #D7262E; --red-deep: #A8141E; --brass: #F2B33D; --brass-deep: #C98A12;
   --leaf: #2FA36B; --leaf-deep: #1E7A4E; --paper: #FFFFFF; --bg: #F6EEE6; --line: #E8D9CB; --ink: #2B0710; --muted: #7A5A55;
-  --display: 'Big Shoulders Display', 'Arial Narrow', sans-serif; --body: 'Baloo Chettan 2', 'Noto Sans Malayalam', system-ui, sans-serif;
+  --display: 'Big Shoulders Display', 'Arial Narrow', sans-serif; --body: 'Anek Malayalam', 'Noto Sans Malayalam', system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); }
@@ -282,9 +282,12 @@ pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size:
     </div>
     <div class="row2">
       <label>Level <select name="difficulty"><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label>
-      <label>Category <input name="category" maxlength="60" list="cats" placeholder="e.g. Constitution"></label>
+      <label>Category <input name="category" maxlength="60" list="cats" placeholder="e.g. NPS"></label>
     </div>
     <datalist id="cats"></datalist>
+    <label>Topic tag (optional) <input name="topic" maxlength="60" list="topics" placeholder="e.g. kerala-2013">
+      <span class="hint" style="font-weight:400">Give rephrased versions of the same fact the same tag. Questions with the same tag never appear in the same game.</span></label>
+    <datalist id="topics"></datalist>
     <label>Explanation shown after answering (optional) <textarea name="explanation" maxlength="600"></textarea></label>
     <label class="check"><input type="checkbox" name="active" checked> Active (can appear in games)</label>
     <p class="err" id="qErr"></p>
@@ -296,9 +299,9 @@ pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size:
 <div class="modal" id="impModal" hidden>
   <div class="box">
     <h2 style="margin:0">Import questions</h2>
-    <p class="hint">Upload a CSV with a header row. Columns: <b>difficulty</b> (easy / medium / hard), <b>category</b>, <b>question</b>, <b>option_a</b> to <b>option_f</b> (at least two), <b>correct</b> (letter A–F), <b>explanation</b>. Malayalam text works; save the file as CSV UTF-8.</p>
-    <pre class="sample">difficulty,category,question,option_a,option_b,option_c,option_d,correct,explanation
-easy,Kerala,How many districts does Kerala have?,12,14,15,16,B,Kerala has 14 districts.</pre>
+    <p class="hint">Upload a CSV with a header row. Columns: <b>difficulty</b> (easy / medium / hard), <b>category</b>, <b>topic</b> (optional tag), <b>question</b>, <b>option_a</b> to <b>option_f</b> (at least two), <b>correct</b> (letter A–F), <b>explanation</b>. Malayalam text works; save the file as CSV UTF-8.</p>
+    <pre class="sample">difficulty,category,topic,question,option_a,option_b,option_c,option_d,correct,explanation
+easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബല്യത്തിൽ വന്നത് ഏത് തീയതി മുതൽ?,01-01-2013,01-04-2013,01-07-2013,01-01-2014,B,01-04-2013 മുതൽ.</pre>
     <input type="file" id="impFile" accept=".csv,text/csv">
     <p class="err" id="impErr"></p>
     <div id="impPreview" class="hint"></div>
@@ -457,18 +460,19 @@ easy,Kerala,How many districts does Kerala have?,12,14,15,16,B,Kerala has 14 dis
   async function loadQuestions() {
     questions = (await api('GET', 'questions')).questions;
     $('#cats').innerHTML = [...new Set(questions.map((q) => q.category).filter(Boolean))].map((c) => `<option value="${esc(c)}">`).join('');
+    $('#topics').innerHTML = [...new Set(questions.map((q) => q.topic).filter(Boolean))].sort().map((c) => `<option value="${esc(c)}">`).join('');
     renderQuestions();
   }
   function renderQuestions() {
     const s = $('#qSearch').value.trim().toLowerCase(), l = $('#qLevel').value, a = $('#qActive').value;
     const list = questions.filter((q) => (!l || q.difficulty === l) && (!a || String(+q.active) === a) &&
-      (!s || q.question.toLowerCase().includes(s) || (q.category || '').toLowerCase().includes(s) || q.options.some((o) => o.toLowerCase().includes(s))));
+      (!s || q.question.toLowerCase().includes(s) || (q.category || '').toLowerCase().includes(s) || (q.topic || '').toLowerCase().includes(s) || q.options.some((o) => o.toLowerCase().includes(s))));
     const counts = ['easy', 'medium', 'hard'].map((lv) => `${questions.filter((q) => q.active && q.difficulty === lv).length} ${lv}`).join(', ');
     $('#qCount').textContent = `Showing ${list.length} of ${questions.length}. Active: ${counts}.`;
     $('#qList').innerHTML = list.map((q) => `
       <article class="q${q.active ? '' : ' off'}">
         <div>
-          <div class="meta"><span class="lvl ${q.difficulty}">${q.difficulty}</span>${q.category ? `<span>${esc(q.category)}</span>` : ''}
+          <div class="meta"><span class="lvl ${q.difficulty}">${q.difficulty}</span>${q.category ? `<span>${esc(q.category)}</span>` : ''}${q.topic ? `<span title="Topic tag">#${esc(q.topic)}</span>` : ''}
             <span>${q.attempts ? `${fmt(q.attempts)} answers, <span class="acc${q.accuracy < 35 ? ' low' : ''}">${q.accuracy}% right</span>${q.skipped ? `, ${fmt(q.skipped)} skipped` : ''}, avg ${(q.avg_ms / 1000).toFixed(1)}s` : 'Not answered yet'}</span>
             ${q.active ? '' : '<b>Hidden</b>'}</div>
           <div class="qt">${esc(q.question)}</div>
@@ -512,7 +516,7 @@ easy,Kerala,How many districts does Kerala have?,12,14,15,16,B,Kerala has 14 dis
     $('#optRows').innerHTML = '';
     (q ? q.options : ['', '', '', '']).forEach((o, i) => optRow(o, q ? i === q.correct_index : false));
     f.question.value = q?.question || ''; f.difficulty.value = q?.difficulty || 'easy';
-    f.category.value = q?.category || ''; f.explanation.value = q?.explanation || ''; f.active.checked = q ? q.active : true;
+    f.category.value = q?.category || ''; f.topic.value = q?.topic || ''; f.explanation.value = q?.explanation || ''; f.active.checked = q ? q.active : true;
     $('#qModal').hidden = false; f.question.focus();
   }
   $('#addQ').addEventListener('click', () => openEditor(null));
@@ -523,7 +527,7 @@ easy,Kerala,How many districts does Kerala have?,12,14,15,16,B,Kerala has 14 dis
     const data = {
       question: f.question.value, options: rows.map((r) => r.querySelector('.opt').value.trim()),
       correct_index: rows.findIndex((r) => r.querySelector('[type=radio]').checked),
-      difficulty: f.difficulty.value, category: f.category.value, explanation: f.explanation.value, active: f.active.checked,
+      difficulty: f.difficulty.value, category: f.category.value, topic: f.topic.value, explanation: f.explanation.value, active: f.active.checked,
     };
     if (data.correct_index < 0) { $('#qErr').textContent = 'Select the right answer with the round button.'; return; }
     try {
@@ -566,7 +570,7 @@ easy,Kerala,How many districts does Kerala have?,12,14,15,16,B,Kerala has 14 dis
       const d = (r[col('difficulty')] || '').trim().toLowerCase();
       if (!r[col('question')]?.trim() || opts.length < 2 || ci < 0 || ci >= opts.length || !['easy', 'medium', 'hard'].includes(d)) { problems.push(n + 2); return; }
       pending.push({ question: r[col('question')].trim(), options: opts, correct: ci, difficulty: d,
-        category: col('category') >= 0 ? r[col('category')] : '', explanation: col('explanation') >= 0 ? r[col('explanation')] : '' });
+        category: col('category') >= 0 ? r[col('category')] : '', topic: col('topic') >= 0 ? r[col('topic')] : '', explanation: col('explanation') >= 0 ? r[col('explanation')] : '' });
     });
     const by = ['easy', 'medium', 'hard'].map((l) => `${pending.filter((p) => p.difficulty === l).length} ${l}`).join(', ');
     $('#impPreview').innerHTML = `Ready to import <b>${pending.length}</b> questions (${by}).` + (problems.length ? `<br>Skipping rows ${problems.slice(0, 15).join(', ')}${problems.length > 15 ? '…' : ''}: missing question, options, level or a valid answer letter.` : '');

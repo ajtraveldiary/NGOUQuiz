@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS questions (
   correct_index  SMALLINT NOT NULL,           -- index into options (0-based)
   difficulty     TEXT NOT NULL CHECK (difficulty IN ('easy','medium','hard')),
   category       TEXT,
+  topic          TEXT,                        -- questions sharing a topic never appear in the same game
   explanation    TEXT,                        -- shown after answering
   active         BOOLEAN NOT NULL DEFAULT true,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -83,3 +84,4 @@ ALTER TABLE answers ADD COLUMN IF NOT EXISTS skipped BOOLEAN NOT NULL DEFAULT fa
 -- Organisation line changed from "Kerala NGO Union, State Committee" to "Kerala NGO Union" (only if not customised)
 UPDATE settings SET value = jsonb_set(value, '{subtitle}', '"Kerala NGO Union"')
   WHERE key = 'game' AND value->>'subtitle' = 'Kerala NGO Union, State Committee';
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS topic TEXT;

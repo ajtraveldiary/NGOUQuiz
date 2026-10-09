@@ -277,7 +277,9 @@
     for (let i = 0; i < march.length; i++) march[i].classList.toggle('now', i === q.index);
     const lv = $('#qLevel'); lv.textContent = `${LEVEL_NAME[q.difficulty]} · ${q.points} pts`; lv.className = 'level ' + q.difficulty;
     $('#qNum').textContent = `Question ${q.index + 1} of ${q.total}`;
-    const qt = $('#qText'); qt.textContent = q.question; qt.classList.remove('in'); void qt.offsetWidth; qt.classList.add('in');
+    const qt = $('#qText'); qt.textContent = q.question; qt.classList.remove('in', 'long', 'xlong'); void qt.offsetWidth;
+    qt.classList.add('in'); if (q.question.length > 150) qt.classList.add('xlong'); else if (q.question.length > 95) qt.classList.add('long');
+    $('#options').classList.toggle('long', q.options.some((o) => o.length > 60));
     const box = $('#options'); box.classList.remove('locked');
     box.innerHTML = q.options.map((o, i) =>
       `<button class="opt" type="button" data-i="${i}"><span class="key">${'ABCDEF'[i]}</span><span class="txt">${esc(o)}</span></button>`).join('');
