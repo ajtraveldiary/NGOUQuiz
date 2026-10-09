@@ -25,10 +25,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
-  background:
-    radial-gradient(120% 60% at 50% -10%, rgba(242, 179, 61, .16), transparent 60%),
-    repeating-linear-gradient(115deg, transparent 0 22px, rgba(255, 255, 255, .018) 22px 44px),
-    var(--night);
+  background: var(--night);
   color: #fff;
   font-family: var(--body);
   font-size: 17px;
@@ -36,6 +33,16 @@ body {
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+}
+/* Background as a fixed layer: fills the screen and stays put while the page scrolls
+   (background-attachment: fixed doesn't work on iPhone) */
+body::before {
+  content: ''; position: fixed; left: 0; right: 0; top: 0; z-index: -1; pointer-events: none;
+  height: 100vh; height: 100lvh;
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(242, 179, 61, .16), transparent 60%),
+    repeating-linear-gradient(115deg, transparent 0 22px, rgba(255, 255, 255, .018) 22px 44px),
+    var(--night);
 }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }

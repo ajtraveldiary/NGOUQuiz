@@ -3,6 +3,9 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.17
+- Fix: on screens taller than the phone (e.g. the opening screen with the play count), the background glow repeated and left a hard line across the page. The background is now a fixed layer that fills the screen and doesn't scroll with the page
+
 ## 1.6.16
 - Opening screen: "Kerala NGO Union / presents" moves up under the flag, beside the pole, to save space
 
