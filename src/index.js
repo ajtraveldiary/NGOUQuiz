@@ -90,7 +90,7 @@ function db(env) {
 // ---------- automatic database setup ----------
 // Creates missing tables, upgrades older databases and loads starter questions into an empty pool.
 // Runs once per Worker instance; afterwards it costs a single quick check.
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 const schemaReady = new Map(); // per database
 function sqlStatements(text) {
   return text.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
@@ -122,6 +122,9 @@ async function ensureSchema(env, d) {
         // load the starter pool into an empty question table
         [`INSERT INTO questions (question, options, correct_index, difficulty, category, explanation, topic)
           SELECT * FROM (VALUES ${values.join(',')}) v WHERE NOT EXISTS (SELECT 1 FROM questions)`, params],
+        // v6: starter questions already in the database move to the Political category
+        [`UPDATE questions SET category = 'Political', updated_at = now()
+          WHERE ${version} < 6 AND question = ANY($1::text[])`, [SEED_QUESTIONS.map((q) => q.question)]],
         [`INSERT INTO settings (key, value) VALUES ('schema_version', $1::jsonb)
           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify(SCHEMA_VERSION)]],
       ];

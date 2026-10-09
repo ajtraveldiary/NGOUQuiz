@@ -3,6 +3,9 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.5.1
+- All 61 starter questions are in the Political category (questions already in the database are updated automatically)
+
 ## 1.5.0
 - New Malayalam question pool: 61 questions (24 easy, 27 medium, 10 hard) on NPS, OPS and the employees' pension struggle; the old English questions are removed automatically on first deploy (one time only)
 - Anek Malayalam font for the game and admin page; long questions use a slightly smaller size

@@ -293,6 +293,13 @@ const race = new PGlite(); await race.exec(oldSchema);
 const rEnv1 = { ...env, __db: mkDb(race) }, rEnv2 = { ...env, __db: mkDb(race) };
 await Promise.all([callEnv(rEnv1, 'GET', '/api/config'), callEnv(rEnv2, 'GET', '/api/config')]);
 assert.equal((await race.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
+// a v5 database (Malayalam pool with old categories) moves the starter questions to Political, leaves admin questions alone
+await race.query(`UPDATE questions SET category = 'NPS'`);
+await race.query(`INSERT INTO questions (question, options, correct_index, difficulty, category) VALUES ('അഡ്മിൻ ചോദ്യം?', '["a","b"]', 0, 'easy', 'GK')`);
+await race.query(`UPDATE settings SET value = '5'::jsonb WHERE key = 'schema_version'`);
+await callEnv({ ...env, __db: mkDb(race) }, 'GET', '/api/health');
+assert.equal((await race.query(`SELECT count(*)::int AS n FROM questions WHERE category = 'Political'`)).rows[0].n, POOL.length);
+assert.equal((await race.query(`SELECT category FROM questions WHERE question = 'അഡ്മിൻ ചോദ്യം?'`)).rows[0].category, 'GK');
 // 3. clear messages for configuration mistakes
 const noUrl = { APP_SECRET: env.APP_SECRET, ADMIN_PASSWORD: 'x' };
 assert.match((await callEnv(noUrl, 'GET', '/api/config')).body.error, /DATABASE_URL is not set/);
