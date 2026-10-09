@@ -1,7 +1,7 @@
 /* In-browser stand-in for the Worker API, used only by the shareable demo build.
    Mirrors the server's game rules; QUESTIONS is injected by build-demo.mjs. */
 (() => {
-  const S = { title: 'Arivu Quiz', subtitle: 'Kerala NGO Union, State Committee', tagline: 'Know your rights. Serve the people.',
+  const S = { title: 'Arivu Quiz', subtitle: 'Kerala NGO Union', tagline: 'Know your rights. Serve the people.',
     values: ['Solidarity', 'Democracy', 'Secularism', 'People-centred public service'],
     easy: 4, medium: 4, hard: 2, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, penalty: { easy: 25, medium: 40, hard: 50 }, streakBonus: 25, streakCap: 100 };
   const DISTRICTS = ['Thiruvananthapuram North', 'Thiruvananthapuram South', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam',

@@ -80,3 +80,6 @@ ALTER TABLE players ADD COLUMN IF NOT EXISTS area TEXT;
 -- Thiruvananthapuram is now two union districts: North and South
 UPDATE players SET district = 'Thiruvananthapuram North' WHERE district = 'Thiruvananthapuram';
 ALTER TABLE answers ADD COLUMN IF NOT EXISTS skipped BOOLEAN NOT NULL DEFAULT false;
+-- Organisation line changed from "Kerala NGO Union, State Committee" to "Kerala NGO Union" (only if not customised)
+UPDATE settings SET value = jsonb_set(value, '{subtitle}', '"Kerala NGO Union"')
+  WHERE key = 'game' AND value->>'subtitle' = 'Kerala NGO Union, State Committee';

@@ -33,6 +33,7 @@ const ok = (r, label) => { if (r.status !== 200) { console.error(label, r); proc
 // config
 const cfg = ok(await call('GET', '/api/config'), 'config');
 assert.equal(cfg.totalQuestions, 10);
+assert.equal(cfg.subtitle, 'Kerala NGO Union');
 assert.equal(cfg.version, JSON.parse(readFileSync(root + 'package.json', 'utf8')).version);
 assert.equal(cfg.districts.length, 15);
 assert.ok(cfg.districts.includes('Thiruvananthapuram North') && cfg.districts.includes('Thiruvananthapuram South'));
@@ -248,10 +249,12 @@ const oldSchema = execSync('git show f765cbf:db/schema.sql', { cwd: root }).toSt
 const old = new PGlite();
 await old.exec(oldSchema);
 await old.query(`INSERT INTO players (name, office, district, phone) VALUES ('Old', 'X', 'Thiruvananthapuram', '9999999999')`);
+await old.query(`INSERT INTO settings (key, value) VALUES ('game', '{"subtitle": "Kerala NGO Union, State Committee", "title": "Arivu Quiz"}')`);
 const envOld = { ...env, __db: { q: async (t, p = []) => (await old.query(t, p)).rows } };
 const c2 = await callEnv(envOld, 'GET', '/api/config');
 assert.equal(c2.status, 200, JSON.stringify(c2.body));
 assert.equal((await old.query('SELECT district FROM players')).rows[0].district, 'Thiruvananthapuram North');
+assert.equal(c2.body.subtitle, 'Kerala NGO Union');
 // 3. clear messages for configuration mistakes
 const noUrl = { APP_SECRET: env.APP_SECRET, ADMIN_PASSWORD: 'x' };
 assert.match((await callEnv(noUrl, 'GET', '/api/config')).body.error, /DATABASE_URL is not set/);

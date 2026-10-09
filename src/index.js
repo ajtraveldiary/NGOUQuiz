@@ -16,7 +16,7 @@ const LEVELS = ['easy', 'medium', 'hard'];
 
 export const DEFAULT_SETTINGS = {
   title: 'Arivu Quiz',
-  subtitle: 'Kerala NGO Union, State Committee',
+  subtitle: 'Kerala NGO Union',
   tagline: 'Know your rights. Serve the people.',
   values: ['Solidarity', 'Democracy', 'Secularism', 'People-centred public service'],
   easy: 4, medium: 4, hard: 2,
@@ -86,7 +86,7 @@ function db(env) {
 // ---------- automatic database setup ----------
 // Creates missing tables, upgrades older databases and loads starter questions into an empty pool.
 // Runs once per Worker instance; afterwards it costs a single quick check.
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const schemaReady = new Map(); // per database
 function sqlStatements(text) {
   return text.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
