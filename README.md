@@ -2,7 +2,7 @@
 
 Mobile-first quiz game on **Cloudflare Workers + Neon Postgres**.
 
-- Player card asks for a name (or nickname), one of Kerala's 14 districts and, optionally, an office name (government employees fill it in; members of the public leave it blank). No phone number. The office is visible to admins only. A player is known by the key saved on their phone → rules card → 3‑2‑1 countdown → 10 timed questions → score, rank and Top 10.
+- Player card asks for a name (or nickname), one of Kerala's 14 districts and, optionally, an office name (government employees fill it in; members of the public leave it blank). No phone number. The leaderboard shows the office and district under each name. A player is known by the key saved on their phone → rules card → 3‑2‑1 countdown → 10 timed questions → score, rank and Top 10.
 - Questions march from easy to hard (default 4 easy, 4 medium, 2 hard, picked at random from the pool every game). Option order is shuffled per player so "the answer is B" can't be passed around.
 - Scoring per right answer: **level points + speed bonus + streak bonus**
   - Level points: easy 100, medium 150, hard 200
@@ -71,6 +71,10 @@ On its first request the Worker creates any missing tables, upgrades older datab
 
 - 10 questions: 6 Political, 1 Constitution, 2 KSR & Govt rules, 1 General political (Settings → Question mix), ordered 4 easy → 4 medium → 2 hard.
 - The opening screen text is fixed in `public/index.html`; only the play count and top score come from the server.
+
+## Link preview
+
+`public/og-image.jpg` (1200×630) is the picture WhatsApp and other apps show when the link is shared. Replace the file to change it. WhatsApp keeps previews it has already fetched for a while, so a link shared before a change may show the old picture.
 
 ## Version
 

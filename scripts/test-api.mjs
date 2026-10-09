@@ -88,7 +88,7 @@ async function cheatCorrect(i, q, key, gameId) {
   const qq = (await pg.query('SELECT correct_index FROM questions WHERE id = $1', [g.question_ids[i]])).rows[0];
   return g.option_orders[i].indexOf(qq.correct_index);
 }
-const p1 = await playGame({ name: 'Anu Mohan', district: 'Thiruvananthapuram' }, cheatCorrect);
+const p1 = await playGame({ name: 'Anu Mohan', district: 'Thiruvananthapuram', office: 'DHS Thiruvananthapuram' }, cheatCorrect);
 assert.deepEqual(p1.levels, ['easy', 'easy', 'easy', 'easy', 'medium', 'medium', 'medium', 'medium', 'hard', 'hard'], '10 questions, no bonus');
 assert.ok(p1.res.answers.every((a) => !('bonus' in a)));
 assert.equal(p1.res.correct, 10);
@@ -174,7 +174,12 @@ assert.equal((await call('POST', '/api/game/next', { playerKey: p3.key, gameId: 
 // Public leaderboard
 const lb = ok(await call('GET', '/api/leaderboard?district=Kollam&key=' + encodeURIComponent(p2.key)), 'board');
 assert.equal(lb.top[0].isMe, true);
-assert.ok(lb.top.every((x) => !('phone' in x) && !('office' in x) && !('area' in x)), 'no phone, office or area in public data');
+assert.ok(lb.top.every((x) => !('phone' in x) && !('area' in x) && 'office' in x), 'leaderboard has office and district, never a phone number');
+{
+  const all = ok(await call('GET', '/api/leaderboard'), 'board all');
+  assert.equal(all.top.find((x) => x.name === 'Anu Mohan').office, 'DHS Thiruvananthapuram');
+  assert.equal(all.top.find((x) => x.name === 'Cicily').office, null, 'no office given: none shown');
+}
 
 // Admin
 assert.equal((await call('GET', '/api/admin/stats')).status, 401);
@@ -250,7 +255,7 @@ assert.ok(csv.body.includes('Anu Mohan'));
   const pub = ok(await call('POST', '/api/register', { name: 'Public Person', district: 'Kollam', office: '   ' }), 'public');
   assert.equal((await pg.query('SELECT office FROM players WHERE name = $1', ['Public Person'])).rows[0].office, null, 'blank office is stored as empty');
   assert.ok(!('office' in pub.player));
-  assert.equal(ok(await call('GET', '/api/admin/players?q=DHS', undefined, A), 'search office').players[0].office, 'DHS');
+  assert.equal(ok(await call('GET', '/api/admin/players?q=DHS', undefined, A), 'search office').players.find((x) => x.name === 'Old Client').office, 'DHS');
   assert.ok((await call('GET', '/api/admin/export?type=players', undefined, A)).body.includes('Office'));
   const r2 = ok(await call('POST', '/api/register', { name: 'Old Client', district: 'Kollam', phone: '9876500000' }), 'same again');
   assert.notEqual(r2.playerKey, r1.playerKey);
