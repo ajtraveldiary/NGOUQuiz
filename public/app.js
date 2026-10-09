@@ -70,7 +70,7 @@
   // ---------- confetti ----------
   const Confetti = (() => {
     const cv = $('#confetti'), ctx = cv.getContext('2d');
-    const colors = ['#D7262E', '#F2B33D', '#2FA36B', '#FBF3E8', '#FF8A8F'];
+    const colors = ['#E3B341', '#FAF5E6', '#2FA36B', '#C65A3A', '#7FD1C4'];
     let parts = [], raf = 0, dpr = 1;
     const size = () => { dpr = Math.min(1.5, devicePixelRatio || 1); cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; };
     addEventListener('resize', size); size();
