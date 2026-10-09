@@ -3,6 +3,9 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.16
+- Opening screen: "Kerala NGO Union / presents" moves up under the flag, beside the pole, to save space
+
 ## 1.6.15
 - Opening screen: once it has fully loaded, the page scrolls to "Play now" if the button is below the screen. It doesn't move if the button is already visible or the player has scrolled or tapped
 
