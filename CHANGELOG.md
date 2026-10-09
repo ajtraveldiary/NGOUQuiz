@@ -3,6 +3,10 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 2.4.0
+- Leaderboard: under each name, the office and district ("Taluk Office, Kottarakkara, Kollam"), or just the district when no office was given; on the Kerala board and the district boards. Long offices wrap (up to three lines on the podium, two in the list) instead of being cut off
+- Player card helper text now says the office shows under the name on the leaderboard
+
 ## 2.3.0
 - Player card: an optional "Office name" field after the district, with the helper text "Government employees: the office where you work. Members of the public: leave it blank." A blank office is stored as empty
 - The office shows on the admin Players page (and its search) and in the leaderboard, games and players exports; it is never shown on the public leaderboard

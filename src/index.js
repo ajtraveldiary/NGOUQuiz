@@ -259,7 +259,7 @@ async function leaderboard(d, district, playerId, env = null) {
   const pub = async () => {
     const [top, totalRow, plays] = await Promise.all([
       d.q(`${boardCte(!!district)}
-        SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.district
+        SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.district, p.office
         FROM ranked r JOIN players p ON p.id = r.player_id
         ORDER BY r.rank LIMIT 10`, params),
       d.q(`${boardCte(!!district)} SELECT count(*)::int AS n FROM ranked`, params),
@@ -271,13 +271,13 @@ async function leaderboard(d, district, playerId, env = null) {
     env ? memo(env, 'board:' + (district || ''), 10_000, pub) : pub(),
     playerId ? d.q(
       `${boardCte(!!district)}
-       SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.district
+       SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.district, p.office
        FROM ranked r JOIN players p ON p.id = r.player_id WHERE r.player_id = $${params.length + 1}`,
       [...params, playerId]) : [],
   ]);
   const map = (x) => x && ({
     rank: x.rank, score: x.score, timeMs: x.total_ms, correct: x.correct_count,
-    name: x.name, district: x.district, isMe: x.player_id === playerId, // no office or area in public data
+    name: x.name, office: x.office || null, district: x.district, isMe: x.player_id === playerId,
   });
   return { top: board.top.map(map), me: map(meRows[0] || null), total: board.total, ...(district ? {} : { plays: board.plays }) };
 }
@@ -311,7 +311,7 @@ async function apiRegister(env, req) {
   const b = await body(req);
   // A name (or nickname), a district and, for government employees, an office name (optional; blank for members
   // of the public). No phone number. The player is known by the key saved on their phone; a new card always
-  // makes a new player. The office is shown on the admin page and in exports only, never on the public board.
+  // makes a new player. The office shows under the name on the leaderboard (with the district), in admin and exports.
   const name = clean(b.name, 80), district = clean(b.district, 40), office = clean(b.office, 120) || null;
   if (name.length < 2) fail(400, 'Enter your name or a nickname.');
   if (!DISTRICTS.includes(district)) fail(400, 'Choose your district.');

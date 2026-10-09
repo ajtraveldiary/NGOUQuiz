@@ -534,7 +534,7 @@
   }
   function renderBoard(el, b, showDistrict) {
     if (!b || !b.top.length) { el.innerHTML = '<p class="empty">No scores yet. Be the first on the board.</p>'; return; }
-    const sub = (x) => (showDistrict ? esc(x.district) : '');
+    const sub = (x) => esc([x.office, x.district].filter(Boolean).join(', ')); // e.g. "Taluk Office, Kottarakkara, Kollam"
     const pod = (x, cls) => x ? `<div class="pod ${cls}${x.isMe ? ' me' : ''}"><span class="who">${esc(x.name)}</span><span class="where">${sub(x)}</span>
       <div class="block"><span class="n">${x.rank}</span><span class="s">${fmt(x.score)}</span></div></div>` : '<div></div>';
     const row = (x) => `<div class="row${x.isMe ? ' me' : ''}"><span class="rk">${fmt(x.rank)}</span>
