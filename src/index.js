@@ -122,55 +122,61 @@ function sqlStatements(text) {
   return text.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
     .split(/;\s*(?:\n|$)/).map((x) => x.trim()).filter(Boolean);
 }
+let lastUpgradeError = null;   // shown on /api/health
 async function ensureSchema(env, d) {
   const key = env.__db || env.DATABASE_URL;
   if (!schemaReady.has(key)) {
     schemaReady.set(key, (async () => {
+      let current = 0;
       try {
         const r = await d.q(`SELECT value FROM settings WHERE key = 'schema_version'`);
-        if (Number(r[0]?.value) >= SCHEMA_VERSION) return;
+        current = Number(r[0]?.value) || 0;
+        if (current >= SCHEMA_VERSION) return;
       } catch (e) {
         if (!/does not exist/i.test(String(e?.message))) throw e;
       }
+      // 1. tables and columns (small, idempotent statements)
       for (const stmt of sqlStatements(SCHEMA_SQL)) await d.q(stmt);
-      const rowsFor = (list) => {
-        const params = [];
-        const values = list.map((q) => {
-          params.push(q.question, JSON.stringify(q.options), q.correct, q.difficulty, q.category || null,
-            q.explanation || null, q.topic || null, !!q.campaign);
-          const n = params.length;
-          return `($${n - 7}, $${n - 6}::jsonb, $${n - 5}::smallint, $${n - 4}, $${n - 3}, $${n - 2}, $${n - 1}, $${n}::boolean)`;
-        });
-        return { values: values.join(','), params };
-      };
-      const all = rowsFor(SEED_QUESTIONS);
-      // question batches added after the first release, and the schema version that adds them once
-      const BATCHES = [['secretariat-valayal-2026', 7], ['question-mix-2026', 8]];
-      const COLS = 'question, options, correct_index, difficulty, category, explanation, topic, campaign';
-      const version = `(SELECT coalesce(max((value #>> '{}')::int), 0) FROM settings WHERE key = 'schema_version')`;
-      const steps = [
-        // only one Worker instance runs the data steps at a time
-        [`SELECT pg_advisory_xact_lock(7241001)`],
-        // v5: the English starter questions are replaced by the Malayalam question pool
-        [`DELETE FROM questions WHERE ${version} < 5`],
-        // load the starter pool into an empty question table
-        [`INSERT INTO questions (${COLS})
-          SELECT * FROM (VALUES ${all.values}) v WHERE NOT EXISTS (SELECT 1 FROM questions)`, all.params],
+      // 2. question data. Only the questions that are actually missing are sent. If this step fails the
+      //    quiz keeps running on the questions it has, and /api/health shows the error.
+      try {
+        const existing = current < 5 ? new Set() : new Set((await d.q(`SELECT question FROM questions`)).map((r) => r.question));
+        // question batches added after the first release, and the schema version that adds them once
+        const BATCH_VERSION = { 'secretariat-valayal-2026': 7, 'question-mix-2026': 8 };
+        const wanted = existing.size === 0 ? SEED_QUESTIONS
+          : SEED_QUESTIONS.filter((q) => q.batch && BATCH_VERSION[q.batch] > current);
+        const missing = wanted.filter((q) => !existing.has(q.question));
+        const COLS = 'question, options, correct_index, difficulty, category, explanation, topic, campaign';
+        const version = `(SELECT coalesce(max((value #>> '{}')::int), 0) FROM settings WHERE key = 'schema_version')`;
+        const steps = [[`SELECT pg_advisory_xact_lock(7241001)`]];   // one Worker instance at a time
+        // v5: the English starter questions were replaced by the Malayalam question pool
+        if (current < 5) steps.push([`DELETE FROM questions WHERE ${version} < 5`]);
+        if (missing.length) {
+          const params = [];
+          const values = missing.map((q) => {
+            params.push(q.question, JSON.stringify(q.options), q.correct, q.difficulty, q.category || null,
+              q.explanation || null, q.topic || null, !!q.campaign);
+            const n = params.length;
+            return `($${n - 7}, $${n - 6}::jsonb, $${n - 5}::smallint, $${n - 4}, $${n - 3}, $${n - 2}, $${n - 1}, $${n}::boolean)`;
+          });
+          steps.push([`INSERT INTO questions (${COLS})
+            SELECT * FROM (VALUES ${values.join(',')}) v(${COLS})
+            WHERE ${version} < ${SCHEMA_VERSION} AND NOT EXISTS (SELECT 1 FROM questions q WHERE q.question = v.question)`, params]);
+        }
         // v6: starter questions already in the database move to the Political category
-        [`UPDATE questions SET category = 'Political', updated_at = now()
-          WHERE ${version} < 6 AND question = ANY($1::text[])`, [SEED_QUESTIONS.map((q) => q.question)]],
-        // v7, v8…: add each new batch of starter questions to an existing pool once, skipping any already there
-        ...BATCHES.map(([batch, v]) => {
-          const b = rowsFor(SEED_QUESTIONS.filter((q) => q.batch === batch));
-          return [`INSERT INTO questions (${COLS})
-            SELECT * FROM (VALUES ${b.values}) v(${COLS})
-            WHERE ${version} < ${v} AND NOT EXISTS (SELECT 1 FROM questions q WHERE q.question = v.question)`, b.params];
-        }),
-        [`INSERT INTO settings (key, value) VALUES ('schema_version', $1::jsonb)
-          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify(SCHEMA_VERSION)]],
-      ];
-      if (d.tx) await d.tx(steps);
-      else for (const [t, p] of steps) await d.q(t, p);
+        if (current < 6 && existing.size) {
+          steps.push([`UPDATE questions SET category = 'Political', updated_at = now()
+            WHERE ${version} < 6 AND question = ANY($1::text[])`, [SEED_QUESTIONS.filter((q) => !q.batch).map((q) => q.question)]]);
+        }
+        steps.push([`INSERT INTO settings (key, value) VALUES ('schema_version', $1::jsonb)
+          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify(SCHEMA_VERSION)]]);
+        if (d.tx) await d.tx(steps);
+        else for (const [t, p] of steps) await d.q(t, p);
+        lastUpgradeError = null;
+      } catch (e) {
+        console.error('question upgrade failed', e);
+        lastUpgradeError = explainDbError(e) || String(e?.message || e).slice(0, 300);
+      }
     })().catch((e) => { schemaReady.delete(key); throw e; }));
   }
   return schemaReady.get(key);
@@ -886,11 +892,13 @@ async function route(req, env) {
       schemaReady.delete(env.__db || env.DATABASE_URL); // always re-check on health
       await ensureSchema(env, d);
       const [r] = await d.q(`SELECT
+        (SELECT coalesce(max((value #>> '{}')::int), 0) FROM settings WHERE key = 'schema_version') AS db_version,
         (SELECT count(*)::int FROM questions WHERE active) AS questions,
         (SELECT count(*)::int FROM players) AS players,
         (SELECT count(*)::int FROM areas) AS areas`);
       return json({
-        ok: true, version: VERSION, database: 'connected', schemaVersion: SCHEMA_VERSION,
+        ok: !lastUpgradeError, version: VERSION, database: 'connected', schemaVersion: SCHEMA_VERSION, databaseVersion: r.db_version,
+        questionUpgrade: lastUpgradeError || 'done',
         activeQuestions: r.questions, players: r.players, areas: r.areas,
         appSecret: env.APP_SECRET && env.APP_SECRET.length >= 16 ? 'set' : 'MISSING (add APP_SECRET, 16+ characters)',
         adminPassword: env.ADMIN_PASSWORD ? 'set' : 'MISSING (add ADMIN_PASSWORD)',

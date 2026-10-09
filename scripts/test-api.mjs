@@ -302,6 +302,7 @@ assert.equal(c1.status, 200, JSON.stringify(c1.body));
 assert.equal(c1.body.totalQuestions, 10);
 const h1 = await callEnv(envFresh, 'GET', '/api/health');
 assert.equal(h1.body.ok, true); assert.equal(h1.body.activeQuestions, POOL.length);
+assert.equal(h1.body.questionUpgrade, 'done'); assert.equal(h1.body.databaseVersion, h1.body.schemaVersion);
 await callEnv(envFresh, 'GET', '/api/health'); // re-running setup must not duplicate questions
 assert.equal((await fresh.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
 // 2. database made with the first version (no areas table, old district name) is upgraded
@@ -334,7 +335,8 @@ await race.query(`UPDATE questions SET category = 'NPS'`);
 await race.query(`INSERT INTO questions (question, options, correct_index, difficulty, category) VALUES ('അഡ്മിൻ ചോദ്യം?', '["a","b"]', 0, 'easy', 'GK')`);
 await race.query(`UPDATE settings SET value = '5'::jsonb WHERE key = 'schema_version'`);
 await callEnv({ ...env, __db: mkDb(race) }, 'GET', '/api/health');
-assert.equal((await race.query(`SELECT count(*)::int AS n FROM questions WHERE category = 'Political'`)).rows[0].n, POOL.length);
+// only the original pension questions move to Political; Constitution / KSR / General political keep their own category
+assert.equal((await race.query(`SELECT count(*)::int AS n FROM questions WHERE category = 'Political'`)).rows[0].n, POOL.filter((q) => !q.batch).length);
 assert.equal((await race.query(`SELECT category FROM questions WHERE question = 'അഡ്മിൻ ചോദ്യം?'`)).rows[0].category, 'GK');
 // a v6 database (first 61 questions only) gets the Secretariat Valayal questions once, no duplicates
 {
@@ -349,6 +351,16 @@ assert.equal((await race.query(`SELECT category FROM questions WHERE question = 
   await callEnv({ ...env, __db: mkDb(v6) }, 'GET', '/api/health');
   assert.equal((await v6.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
   assert.equal((await v6.query('SELECT count(*)::int AS n FROM questions WHERE campaign')).rows[0].n, POOL.filter((q) => q.campaign).length);
+}
+// if the question upgrade fails, the quiz keeps running and /api/health reports it
+{
+  const broken = new PGlite(); await broken.exec(oldSchema);
+  const db = mkDb(broken);
+  const envBroken = { ...env, __db: { q: db.q, tx: async () => { throw new Error('simulated failure'); } } };
+  const c = await callEnv(envBroken, 'GET', '/api/config');
+  assert.equal(c.status, 200, 'config still works');
+  const h = await callEnv({ ...envBroken }, 'GET', '/api/health');
+  assert.equal(h.body.ok, false); assert.match(h.body.questionUpgrade, /simulated failure/);
 }
 // 3. clear messages for configuration mistakes
 const noUrl = { APP_SECRET: env.APP_SECRET, ADMIN_PASSWORD: 'x' };

@@ -3,6 +3,11 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.1
+- Database upgrade sends only the questions that are missing, instead of the whole pool
+- If adding questions fails, the quiz keeps running on the existing questions; /api/health shows the error (`questionUpgrade`) and the database version
+- robots.txt allows /api/health so the status page can be checked remotely
+
 ## 1.6.0 — Secretariat Valayal campaign
 - Opening screen: countdown ticket for the Secretariat Valayal (Saturday, 21 November 2026, Thiruvananthapuram); new tagline
 - Results: campaign card with the 7 demands; share text invites colleagues to join on 21 November
