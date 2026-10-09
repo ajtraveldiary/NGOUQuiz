@@ -3,6 +3,15 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.18
+- Opening screen stats reworded: "3 employees have played so far" and "Top score 1,348. You’re #1" (the play count is unchanged; the "on the board" count is no longer shown)
+
+## 1.6.17
+- Fix: on screens taller than the phone (e.g. the opening screen with the play count), the background glow repeated and left a hard line across the page. The background is now a fixed layer that fills the screen and doesn't scroll with the page
+
+## 1.6.16
+- Opening screen: "Kerala NGO Union / presents" moves up under the flag, beside the pole, to save space
+
 ## 1.6.15
 - Opening screen: once it has fully loaded, the page scrolls to "Play now" if the button is below the screen. It doesn't move if the button is already visible or the player has scrolled or tapped
 

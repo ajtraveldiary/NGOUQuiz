@@ -175,9 +175,8 @@
     renderSplashPlayer();
     const board = API.board('', S.me?.playerKey).then((b) => {
       const lines = [];
-      if (b.plays) lines.push(`<b>${fmt(b.plays)}</b> play${b.plays === 1 ? '' : 's'} so far`);
-      if (b.total) lines.push(`<b>${fmt(b.total)}</b> employees on the board. Top score <b>${fmt(b.top[0]?.score)}</b>` +
-        (b.me ? `. You're <b>#${fmt(b.me.rank)}</b>` : ''));
+      if (b.plays) lines.push(`<b>${fmt(b.plays)}</b> ${b.plays === 1 ? 'employee has' : 'employees have'} played so far`);
+      if (b.total) lines.push(`Top score <b>${fmt(b.top[0]?.score)}</b>` + (b.me ? `. You’re <b>#${fmt(b.me.rank)}</b>` : ''));
       if (!lines.length) return;
       const el = $('#splashStats'); el.hidden = false;
       el.innerHTML = lines.join('<br>');
