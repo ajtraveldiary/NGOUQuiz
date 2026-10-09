@@ -3,6 +3,9 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.15
+- Opening screen: once it has fully loaded, the page scrolls to "Play now" if the button is below the screen. It doesn't move if the button is already visible or the player has scrolled or tapped
+
 ## 1.6.14
 - Opening screen tagline always breaks after the first sentence; the text shrinks slightly on very narrow phones so it stays on two lines
 
