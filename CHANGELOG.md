@@ -3,6 +3,10 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 2.1.0
+- All players registered before this version are deleted, with their games and answers; the leaderboard and play count start again from zero. A phone that still remembers a deleted player is asked to fill in a new player card
+- The admin page no longer has the Districts & areas tab; areas are gone from the database, the Insights page, the Players filter and every export. Players still choose a district
+
 ## 2.0.0 — unbranded
 - No organisation or event on any screen: the flag and emblem, the organisation line, the event countdown card, the results card and the event wording in the share message are removed. Page title and link previews say only "Arivu Quiz"
 - No bonus question: every game is 10 questions. The bonus switch, filter, question tick box and Excel column are removed from the admin page

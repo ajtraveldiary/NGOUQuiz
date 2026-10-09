@@ -246,10 +246,13 @@ assert.ok(csv.body.includes('Anu Mohan'));
 // an old copy of the game may still send phone and office: they are ignored, and every card is a new player
 {
   const r1 = ok(await call('POST', '/api/register', { name: 'Old Client', office: 'DHS', district: 'Kollam', area: 'X', phone: '9876500000' }), 'old fields');
-  assert.deepEqual((await pg.query('SELECT office, phone, area FROM players WHERE name = $1', ['Old Client'])).rows[0], { office: null, phone: null, area: null });
+  assert.deepEqual((await pg.query('SELECT office, phone FROM players WHERE name = $1', ['Old Client'])).rows[0], { office: null, phone: null });
   const r2 = ok(await call('POST', '/api/register', { name: 'Old Client', district: 'Kollam', phone: '9876500000' }), 'same again');
   assert.notEqual(r2.playerKey, r1.playerKey);
   assert.deepEqual(Object.keys(r2.player).sort(), ['district', 'name']);
+  // a phone that still holds the key of a deleted player is asked for a new card
+  await pg.query('DELETE FROM players WHERE name = $1', ['Old Client']);
+  assert.equal((await call('POST', '/api/game/start', { playerKey: r2.playerKey })).status, 401);
   console.log('✓ player card: name and district only; phone, office and area are never stored');
 }
 const qcsv = await call('GET', '/api/admin/export?type=questions', undefined, A);
@@ -264,21 +267,7 @@ assert.equal((await call('POST', '/api/game/start', { playerKey: p2.key })).stat
 ok(await call('PUT', '/api/admin/settings', { open: false, maxAttempts: 0 }, A), 'close');
 assert.equal((await call('POST', '/api/game/start', { playerKey: p3.key })).status, 403);
 
-// admin areas: kept for earlier players (the player card no longer asks)
-assert.deepEqual(ok(await call('POST', '/api/admin/areas', { district: 'Kollam', names: ['Kottarakkara', 'Kollam Town', 'Kottarakkara', ' '] }, A), 'add areas'), { added: 2, skipped: 0 });
-assert.equal((await call('POST', '/api/admin/areas', { district: 'Nowhere', names: ['x'] }, A)).status, 400);
-await pg.query(`UPDATE players SET area = 'Kottarakkara' WHERE name = 'Biju K'`);
-const ar = ok(await call('GET', '/api/admin/areas', undefined, A), 'areas list');
-const kt = ar.areas.find((a) => a.name === 'Kottarakkara');
-assert.equal(kt.players, 1);
-assert.equal((await call('PUT', '/api/admin/areas/' + kt.id, { name: 'Kollam Town' }, A)).status, 409);
-assert.equal(ok(await call('PUT', '/api/admin/areas/' + kt.id, { name: 'Kottarakara' }, A), 'rename').playersUpdated, 1);
-assert.equal(ok(await call('GET', '/api/admin/players?district=Kollam&area=Kottarakara', undefined, A), 'by area').total, 1);
-assert.ok(ok(await call('GET', '/api/admin/stats', undefined, A), 'stats2').byArea.some((x) => x.area === 'Kottarakara'));
-assert.ok((await call('GET', '/api/admin/export?type=players', undefined, A)).body.includes('Kottarakara'));
-ok(await call('DELETE', '/api/admin/areas/' + kt.id, undefined, A), 'delete area');
-assert.ok(!('areas' in ok(await call('GET', '/api/config'), 'cfg3')));
-console.log('✓ areas: rename updates players, filter, stats, export, delete');
+assert.equal((await call('GET', '/api/admin/areas', undefined, A)).status, 404, 'the areas page is gone');
 // ---- question picking: never two questions with the same topic in one game ----
 {
   const { pickQuestions } = await import(root + '.test-build/worker.mjs?pick');
@@ -332,7 +321,8 @@ await old.query(`INSERT INTO questions (question, options, correct_index, diffic
 const envOld = { ...env, __db: mkDb(old) };
 const c2 = await callEnv(envOld, 'GET', '/api/config');
 assert.equal(c2.status, 200, JSON.stringify(c2.body));
-assert.equal((await old.query('SELECT district FROM players')).rows[0].district, 'Thiruvananthapuram');
+assert.equal((await old.query('SELECT count(*)::int AS n FROM players')).rows[0].n, 0, 'players from before v11 are deleted');
+assert.equal((await old.query(`SELECT to_regclass('areas') AS t`)).rows[0].t, null, 'areas table removed');
 assert.ok(!('subtitle' in c2.body));
 assert.deepEqual(Object.keys((await old.query(`SELECT value FROM settings WHERE key = 'game'`)).rows[0].value), ['title'], 'retired settings removed');
 await old.query(`INSERT INTO players (name, district) VALUES ('No phone', 'Kollam')`); // phone and office are optional now
@@ -378,7 +368,8 @@ assert.equal((await race.query(`SELECT category FROM questions WHERE question = 
       [q.question, JSON.stringify(q.options), q.correct, q.difficulty, q.category, q.topic, !!q.campaign]);
   }
   await v9.query(`INSERT INTO players (name, office, district, phone) VALUES ('North', 'X', 'Thiruvananthapuram North', '9000000011'), ('South', 'Y', 'Thiruvananthapuram South', '9000000012')`);
-  await v9.query(`INSERT INTO areas (district, name) VALUES ('Thiruvananthapuram North', 'Same'), ('Thiruvananthapuram South', 'Same'), ('Thiruvananthapuram South', 'Other')`);
+  const gp = (await v9.query(`SELECT id FROM players LIMIT 1`)).rows[0].id;
+  await v9.query(`INSERT INTO games (player_id, question_ids, option_orders, config) VALUES ($1, '{1}', '[[0,1]]', '{}')`, [gp]);
   await v9.query(`INSERT INTO settings (key, value) VALUES ('schema_version', '9'::jsonb), ('game', '{"subtitle": "Org", "campaign": {"show": true}, "bonusQuestion": true, "easy": 4}'::jsonb)`);
   const h = await callEnv({ ...env, __db: mkDb(v9) }, 'GET', '/api/health');
   await callEnv({ ...env, __db: mkDb(v9) }, 'GET', '/api/health'); // runs once
@@ -386,11 +377,10 @@ assert.equal((await race.query(`SELECT category FROM questions WHERE question = 
   assert.equal(h.body.activeQuestions, POOL.length, 'only the current pool stays active');
   assert.equal((await v9.query('SELECT count(*)::int AS n FROM questions WHERE NOT active')).rows[0].n, OLD_POOL.length - POOL.length, 'retired questions are hidden, not deleted');
   assert.equal((await v9.query('SELECT count(*)::int AS n FROM questions WHERE campaign')).rows[0].n, 0);
-  assert.deepEqual((await v9.query('SELECT DISTINCT district FROM players')).rows, [{ district: 'Thiruvananthapuram' }]);
-  assert.equal((await v9.query('SELECT count(*)::int AS n FROM players WHERE phone IS NOT NULL OR office IS NOT NULL')).rows[0].n, 0, 'old phone numbers and offices are erased');
-  assert.deepEqual((await v9.query(`SELECT name FROM areas WHERE district = 'Thiruvananthapuram' ORDER BY name`)).rows.map((r) => r.name), ['Other', 'Same']);
+  assert.equal((await v9.query('SELECT count(*)::int AS n FROM players')).rows[0].n, 0, 'every earlier player is deleted');
+  assert.equal((await v9.query('SELECT count(*)::int AS n FROM games')).rows[0].n, 0, 'with their games');
   assert.deepEqual((await v9.query(`SELECT value FROM settings WHERE key = 'game'`)).rows[0].value, { easy: 4 });
-  console.log('✓ upgrade from the earlier pool: 27 questions hidden, districts merged, old phone numbers and offices erased, retired settings removed');
+  console.log('✓ upgrade from the earlier pool: 27 questions hidden, earlier players and their games deleted, retired settings removed');
 }
 // if the question upgrade fails, the quiz keeps running and /api/health reports it
 {
