@@ -387,9 +387,10 @@ assert.equal((await race.query(`SELECT category FROM questions WHERE question = 
   assert.equal((await v9.query('SELECT count(*)::int AS n FROM questions WHERE NOT active')).rows[0].n, OLD_POOL.length - POOL.length, 'retired questions are hidden, not deleted');
   assert.equal((await v9.query('SELECT count(*)::int AS n FROM questions WHERE campaign')).rows[0].n, 0);
   assert.deepEqual((await v9.query('SELECT DISTINCT district FROM players')).rows, [{ district: 'Thiruvananthapuram' }]);
+  assert.equal((await v9.query('SELECT count(*)::int AS n FROM players WHERE phone IS NOT NULL OR office IS NOT NULL')).rows[0].n, 0, 'old phone numbers and offices are erased');
   assert.deepEqual((await v9.query(`SELECT name FROM areas WHERE district = 'Thiruvananthapuram' ORDER BY name`)).rows.map((r) => r.name), ['Other', 'Same']);
   assert.deepEqual((await v9.query(`SELECT value FROM settings WHERE key = 'game'`)).rows[0].value, { easy: 4 });
-  console.log('✓ upgrade from the earlier pool: 27 questions hidden, districts merged, retired settings removed');
+  console.log('✓ upgrade from the earlier pool: 27 questions hidden, districts merged, old phone numbers and offices erased, retired settings removed');
 }
 // if the question upgrade fails, the quiz keeps running and /api/health reports it
 {

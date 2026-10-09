@@ -154,7 +154,11 @@ async function ensureSchema(env, d) {
           steps.push([`UPDATE questions SET active = false, campaign = false, updated_at = now()
             WHERE ${version} < 10 AND (campaign OR encode(sha256(convert_to(question, 'UTF8')), 'hex') = ANY($1::text[]))`, [RETIRED_QUESTIONS]]);
         }
-        if (current < 10) steps.push([`UPDATE settings SET value = value - $1::text[] WHERE key = 'game' AND ${version} < 10`, [RETIRED_SETTINGS]]);
+        if (current < 10) {
+          steps.push([`UPDATE settings SET value = value - $1::text[] WHERE key = 'game' AND ${version} < 10`, [RETIRED_SETTINGS]]);
+          // phone numbers and offices collected before v10 are erased (they are no longer collected or shown)
+          steps.push([`UPDATE players SET phone = NULL, office = NULL WHERE ${version} < 10 AND (phone IS NOT NULL OR office IS NOT NULL)`]);
+        }
         if (missing.length) {
           const params = [];
           const values = missing.map((q) => {
@@ -260,7 +264,7 @@ async function leaderboard(d, district, playerId, env = null) {
   const pub = async () => {
     const [top, totalRow, plays] = await Promise.all([
       d.q(`${boardCte(!!district)}
-        SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.office, p.district, p.area
+        SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.district
         FROM ranked r JOIN players p ON p.id = r.player_id
         ORDER BY r.rank LIMIT 10`, params),
       d.q(`${boardCte(!!district)} SELECT count(*)::int AS n FROM ranked`, params),
@@ -272,7 +276,7 @@ async function leaderboard(d, district, playerId, env = null) {
     env ? memo(env, 'board:' + (district || ''), 10_000, pub) : pub(),
     playerId ? d.q(
       `${boardCte(!!district)}
-       SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.office, p.district, p.area
+       SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.district
        FROM ranked r JOIN players p ON p.id = r.player_id WHERE r.player_id = $${params.length + 1}`,
       [...params, playerId]) : [],
   ]);
@@ -739,11 +743,11 @@ async function adminPlayers(env, url) {
   const area = url.searchParams.get('area') || '';
   const page = Math.max(0, Number(url.searchParams.get('page')) || 0);
   const like = `%${search}%`;
-  const where = `($1 = '' OR p.name ILIKE $2 OR p.office ILIKE $2 OR p.phone LIKE $2 OR p.area ILIKE $2)
+  const where = `($1 = '' OR p.name ILIKE $2 OR p.area ILIKE $2)
     AND ($3 = '' OR p.district = $3) AND ($4 = '' OR coalesce(p.area, '') = $4)`;
   const d = db(env);
   const rows = await d.q(`
-    SELECT p.id, p.name, p.office, p.district, p.area, p.phone, p.created_at,
+    SELECT p.id, p.name, p.district, p.area, p.created_at,
       count(g.id) FILTER (WHERE g.status <> 'void')::int AS games,
       max(g.score) FILTER (WHERE g.status = 'finished') AS best,
       max(g.correct_count) FILTER (WHERE g.status = 'finished') AS best_correct,
@@ -823,21 +827,21 @@ async function adminExport(env, url) {
   const d = db(env);
   let head, rows;
   if (type === 'leaderboard') {
-    head = ['Rank', 'Name', 'Office', 'District', 'Area', 'Phone', 'Best score', 'Correct', 'Time (s)', 'Finished at'];
+    head = ['Rank', 'Name', 'District', 'Area', 'Best score', 'Correct', 'Time (s)', 'Finished at'];
     const r = await d.q(`${boardCte(false)}
-      SELECT r.rank, p.name, p.office, p.district, p.area, p.phone, r.score, r.correct_count, r.total_ms, r.finished_at
+      SELECT r.rank, p.name, p.district, p.area, r.score, r.correct_count, r.total_ms, r.finished_at
       FROM ranked r JOIN players p ON p.id = r.player_id ORDER BY r.rank`);
-    rows = r.map((x) => [x.rank, x.name, x.office, x.district, x.area, x.phone, x.score, x.correct_count, (x.total_ms / 1000).toFixed(1), x.finished_at]);
+    rows = r.map((x) => [x.rank, x.name, x.district, x.area, x.score, x.correct_count, (x.total_ms / 1000).toFixed(1), x.finished_at]);
   } else if (type === 'games') {
-    head = ['Game', 'Name', 'Office', 'District', 'Area', 'Phone', 'Status', 'Score', 'Correct', 'Wrong', 'Skipped', 'Marks lost', 'Questions', 'Time (s)', 'Best streak', 'Started', 'Finished'];
+    head = ['Game', 'Name', 'District', 'Area', 'Status', 'Score', 'Correct', 'Wrong', 'Skipped', 'Marks lost', 'Questions', 'Time (s)', 'Best streak', 'Started', 'Finished'];
     const r = await d.q(`
-      SELECT g.id, p.name, p.office, p.district, p.area, p.phone, g.status, g.score, g.correct_count,
+      SELECT g.id, p.name, p.district, p.area, g.status, g.score, g.correct_count,
         (SELECT count(*) FROM answers a WHERE a.game_id = g.id AND NOT a.is_correct AND NOT a.skipped AND a.chosen_index IS NOT NULL)::int AS wrong,
         (SELECT count(*) FROM answers a WHERE a.game_id = g.id AND a.skipped)::int AS skipped,
         (SELECT coalesce(-sum(a.points) FILTER (WHERE a.points < 0), 0) FROM answers a WHERE a.game_id = g.id)::int AS lost,
         cardinality(g.question_ids) AS total, g.total_ms, g.best_streak, g.started_at, g.finished_at
       FROM games g JOIN players p ON p.id = g.player_id ORDER BY g.started_at DESC`);
-    rows = r.map((x) => [x.id, x.name, x.office, x.district, x.area, x.phone, x.status, x.score, x.correct_count, x.wrong, x.skipped, x.lost, x.total, (x.total_ms / 1000).toFixed(1), x.best_streak, x.started_at, x.finished_at]);
+    rows = r.map((x) => [x.id, x.name, x.district, x.area, x.status, x.score, x.correct_count, x.wrong, x.skipped, x.lost, x.total, (x.total_ms / 1000).toFixed(1), x.best_streak, x.started_at, x.finished_at]);
   } else if (type === 'questions') {
     head = ['id', 'difficulty', 'category', 'topic', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'option_f', 'correct', 'explanation', 'active'];
     const r = await d.q(`SELECT * FROM questions ORDER BY id`);
@@ -846,12 +850,12 @@ async function adminExport(env, url) {
       return [x.id, x.difficulty, x.category, x.topic, x.question, ...o, 'ABCDEF'[x.correct_index], x.explanation, x.active ? 'yes' : 'no'];
     });
   } else {
-    head = ['Name', 'Office', 'District', 'Area', 'Phone', 'Registered', 'Games', 'Best score'];
+    head = ['Name', 'District', 'Area', 'Registered', 'Games', 'Best score'];
     const r = await d.q(`
-      SELECT p.name, p.office, p.district, p.area, p.phone, p.created_at,
+      SELECT p.name, p.district, p.area, p.created_at,
         count(g.id) FILTER (WHERE g.status <> 'void')::int AS games, max(g.score) FILTER (WHERE g.status = 'finished') AS best
       FROM players p LEFT JOIN games g ON g.player_id = p.id GROUP BY p.id ORDER BY p.created_at`);
-    rows = r.map((x) => [x.name, x.office, x.district, x.area, x.phone, x.created_at, x.games, x.best]);
+    rows = r.map((x) => [x.name, x.district, x.area, x.created_at, x.games, x.best]);
   }
   const fmt = (v) => (v instanceof Date ? v.toISOString() : v);
   const csv = '﻿' + [head, ...rows].map((r) => r.map((v) => csvCell(fmt(v))).join(',')).join('\r\n');

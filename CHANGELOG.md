@@ -12,5 +12,6 @@ Bump `version` in `package.json` with every pushed change.
 - Results badges: Expert / Well informed / Good effort / Keep learning. Rules screen: "Welcome."
 - Neutral favicon; the admin address changed (see wrangler.toml `ADMIN_PATH`); project renamed `arivu-quiz`
 - Settings that are no longer used (organisation line, tagline, values, event details, bonus switch) are removed from the database
+- Phone numbers and offices saved by earlier versions are erased from the database, and removed from the admin page and every export
 
 Earlier versions: see the git history.
