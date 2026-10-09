@@ -122,7 +122,12 @@ button { cursor: pointer; }
 .ticket-body { padding: 10px 14px; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
 .ticket-ml { margin: 0; font-weight: 800; font-size: 21px; line-height: 1.25; color: var(--red-deep); }
 .ticket-meta { margin: 0; font-size: 14px; font-weight: 600; color: #6B4A45; }
-.splash-stats { color: var(--mist); font-size: 15px; }
+.splash-stats { color: var(--mist); font-size: 15px; min-height: 64px; }
+.splash-stats.in { animation: fadeIn .4s ease both; }
+@keyframes fadeIn { from { opacity: 0; } }
+.next-btn.busy { opacity: .7; }
+.result.pending .badge, .result.pending .answer-dots, .result.pending .res-note,
+.result.pending .res-stats, .result.pending .rank-card { visibility: hidden; }
 .splash-stats b { color: var(--brass); font-family: var(--display); font-size: 22px; letter-spacing: .02em; }
 .ver { margin: 8px 0 0; font-size: 11px; color: var(--mist-2); opacity: .7; letter-spacing: .03em; }
 .splash-actions { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 16px; }

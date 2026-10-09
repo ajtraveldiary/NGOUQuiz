@@ -152,6 +152,10 @@
     $('#soundBtn').setAttribute('aria-pressed', String(Sound.on));
     $('#soundBtn').setAttribute('aria-label', Sound.on ? 'Sound on' : 'Sound off');
     try { renderCampaign(); } catch (e) { console.error('campaign', e); }
+    // Show the player's button and the last known stats straight away; both requests run side by side
+    renderSplashPlayer();
+    renderStats(store.get('stats'));
+    const board = API.board('', S.me?.playerKey).then((b) => { store.set('stats', b && { plays: b.plays, total: b.total, top: b.top.slice(0, 1), me: b.me }); renderStats(b); }).catch(() => {});
     try { S.cfg = await API.config(); } catch (e) { toast(e.message); S.cfg = null; }
     // A phone can keep an old cached copy of the page after an update. If the page is older than the
     // server, load the fresh page once (the guard stops a reload loop while a deploy is still rolling out).
@@ -173,17 +177,19 @@
     if (c.version) $('#appVersion').textContent = 'v' + c.version;
     if (c.open === false) { $('#playBtn').disabled = true; $('#playBtn').textContent = 'Quiz is closed for now'; }
     renderSplashPlayer();
-    const board = API.board('', S.me?.playerKey).then((b) => {
-      const lines = [];
-      if (b.plays) lines.push(`<b>${fmt(b.plays)}</b> ${b.plays === 1 ? 'employee has' : 'employees have'} played so far`);
-      if (b.total) lines.push(`Top score <b>${fmt(b.top[0]?.score)}</b>` + (b.me ? `. You’re <b>#${fmt(b.me.rank)}</b>` : ''));
-      if (!lines.length) return;
-      const el = $('#splashStats'); el.hidden = false;
-      el.innerHTML = lines.join('<br>');
-    }).catch(() => {});
     // Once the opening screen has fully loaded (images, fonts, play count), bring "Play now" into view
     const loaded = new Promise((ok) => (document.readyState === 'complete' ? ok() : addEventListener('load', ok, { once: true })));
     Promise.all([loaded, document.fonts?.ready, board]).then(() => setTimeout(scrollToPlay, 300));
+  }
+  // The stats lines keep their space from the start, so nothing below them jumps when they arrive
+  function renderStats(b) {
+    if (!b) return;
+    const lines = [];
+    if (b.plays) lines.push(`<b>${fmt(b.plays)}</b> ${b.plays === 1 ? 'employee has' : 'employees have'} played so far`);
+    if (b.total) lines.push(`Top score <b>${fmt(b.top?.[0]?.score)}</b>` + (b.me ? `. You’re <b>#${fmt(b.me.rank)}</b>` : ''));
+    const el = $('#splashStats'), html = lines.join('<br>');
+    if (el.innerHTML === html) return;
+    el.innerHTML = html; el.classList.remove('in'); void el.offsetWidth; el.classList.add('in');
   }
   // Don't move the page if the player has already scrolled or tapped
   let touched = false;
@@ -267,17 +273,21 @@
     Sound.init();
     const btns = [$('#startBtn'), $('#againBtn')];
     btns.forEach((b) => { b.disabled = true; });
+    const from = screens.find((s) => $('#screen-' + s).classList.contains('is-active'));
     try {
-      const g = await API.start(S.me.playerKey);
+      // the 3-2-1 countdown runs while the server sets up the game (no question is served until it ends)
+      const starting = API.start(S.me.playerKey); starting.catch(() => {});
+      $('#march').innerHTML = ''; $('#hudScore').textContent = '0'; setStreak(0);
+      $('#qText').textContent = ''; $('#options').innerHTML = ''; $('#feedback').hidden = true; $('#skipBtn').hidden = true;
+      show('quiz');
+      await countdown();
+      const g = await starting;
       S.gameId = g.gameId; S.total = g.total; S.score = 0; S.streak = 0; S.lastLevel = null;
       const bonusSlot = S.cfg?.bonusQuestion && g.total > (S.cfg?.totalQuestions || 10);
       $('#march').innerHTML = Array.from({ length: g.total }, (_, i) => `<li${bonusSlot && i === g.total - 1 ? ' class="bonus-slot" title="Bonus question"' : ''}></li>`).join('');
-      $('#hudScore').textContent = '0'; setStreak(0);
-      show('quiz');
-      $('#qText').textContent = ''; $('#options').innerHTML = ''; $('#feedback').hidden = true;
-      await countdown();
       await loadNext();
     } catch (e) {
+      if (e.status !== 401 && from) show(from);
       if (e.status === 401) { S.me = null; store.set('player', null); renderSplashPlayer(); toast('Please register again.'); openRegister(); }
       else toast(e.message, 4500);
     } finally { btns.forEach((b) => { b.disabled = false; }); }
@@ -314,9 +324,13 @@
 
   async function loadNext() {
     clearTimeout(S.nextT);
+    if (S.loading) return; // a double tap on Next must not ask for the question twice
+    S.loading = true;
+    const nb = $('#nextBtn'), slow = setTimeout(() => { nb.classList.add('busy'); nb.querySelector('.lbl').textContent = 'Loading…'; }, 250);
     let q;
     try { q = await API.next(S.me.playerKey, S.gameId); }
-    catch (e) { toast(e.message); $('#feedback').hidden = false; $('#nextBtn .lbl').textContent = 'Try again'; return; }
+    catch (e) { toast(e.message); $('#feedback').hidden = false; nb.querySelector('.lbl').textContent = 'Try again'; return; }
+    finally { clearTimeout(slow); nb.classList.remove('busy'); S.loading = false; }
     if (q.done) return finish();
     if (q.bonus) await bonusIntro();
     else if (S.lastLevel && q.difficulty !== S.lastLevel) await levelUp(q.difficulty);
@@ -464,11 +478,13 @@
   async function finish() {
     stopTimer();
     show('result');
+    const scr = $('#screen-result'); scr.classList.add('pending');
     $('#resScore').textContent = '0';
     $('#board').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
     let r;
     try { r = await API.result(S.me.playerKey, S.gameId); }
     catch (e) { toast(e.message); return; }
+    finally { scr.classList.remove('pending'); }
     S.result = r;
     $('#resBadge').textContent = badgeFor(r.correct, r.total);
     countUp($('#resScore'), 0, r.score, 1400);

@@ -3,6 +3,13 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.19
+- Smoother loading:
+  - Opening screen: the player's button and the last known stats show straight away; the stats keep their space, so "Play now" no longer jumps down when they arrive, and they fade in when they change. The stats request runs alongside the settings request instead of after it
+  - Starting a game: the 3-2-1 countdown starts at once while the server sets up the game
+  - Between questions: a double tap on Next can't ask for the question twice; Next shows "Loading…" if the next question is slow
+  - Results: the placeholder badge and stats stay hidden until the real result arrives
+
 ## 1.6.18
 - Opening screen stats reworded: "3 employees have played so far" and "Top score 1,348. You’re #1" (the play count is unchanged; the "on the board" count is no longer shown)
 
