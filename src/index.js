@@ -911,6 +911,15 @@ async function route(req, env) {
       },
     });
   }
+  // Link previews (WhatsApp and others) only show the picture when its address is complete, so the page's
+  // og:image and og:url get this site's own address (works on workers.dev and on any custom domain)
+  if ((p === '/' || p === '/index.html') && (m === 'GET' || m === 'HEAD') && env.ASSETS && typeof HTMLRewriter !== 'undefined') {
+    const page = await env.ASSETS.fetch(req);
+    return new HTMLRewriter()
+      .on('meta[property="og:image"]', { element(e) { e.setAttribute('content', url.origin + '/og-image.jpg'); } })
+      .on('meta[property="og:url"]', { element(e) { e.setAttribute('content', url.origin + '/'); } })
+      .transform(page);
+  }
   if (!p.startsWith('/api/')) return null;
   if (p === '/api/health' && m === 'GET') {
     try {

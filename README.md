@@ -72,6 +72,10 @@ On its first request the Worker creates any missing tables, upgrades older datab
 - 10 questions: 6 Political, 1 Constitution, 2 KSR & Govt rules, 1 General political (Settings → Question mix), ordered 4 easy → 4 medium → 2 hard.
 - The opening screen text is fixed in `public/index.html`; only the play count and top score come from the server.
 
+## Link preview
+
+`public/og-image.jpg` (1200×630) is the picture WhatsApp and other apps show when the link is shared. Replace the file to change it. WhatsApp keeps previews it has already fetched for a while, so a link shared before a change may show the old picture.
+
 ## Version
 
 The version number shows in small text on the opening screen, in the admin header and at `/api/health`. It comes from `version` in `package.json`; see `CHANGELOG.md`. After changing it, run `npm run stamp` so `public/index.html` and its file links carry the same version (the tests check this); an old page left open in a browser then reloads itself once.

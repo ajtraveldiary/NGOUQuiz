@@ -3,6 +3,10 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 2.5.0
+- Link preview picture: sharing the quiz link on WhatsApp (and Telegram, Facebook and others) shows a 1200×630 card with the അറിവ് logo, QUIZ and the tagline on the teal background (`public/og-image.jpg`, 54 KB)
+- The Worker fills in the site's full address in the page's link-preview tags (they must be complete addresses), so the picture keeps working on workers.dev and on any custom domain. `run_worker_first` in wrangler.toml sends just the page through the Worker
+
 ## 2.4.0
 - Leaderboard: under each name, the office and district ("Taluk Office, Kottarakkara, Kollam"), or just the district when no office was given; on the Kerala board and the district boards. Long offices wrap (up to three lines on the podium, two in the list) instead of being cut off
 - Player card helper text now says the office shows under the name on the leaderboard
