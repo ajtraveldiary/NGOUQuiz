@@ -43,6 +43,8 @@ assert.equal(cfg.bonusQuestion, true);
 assert.equal(cfg.campaign.date, '2026-11-21');
 assert.equal(cfg.subtitle, 'Kerala NGO Union');
 assert.equal(cfg.version, JSON.parse(readFileSync(root + 'package.json', 'utf8')).version);
+assert.equal(ok(await call('GET', '/api/version'), 'version').version, cfg.version);
+assert.equal((await worker.fetch(new Request('https://quiz.test/api/version'), { ...env, __db: undefined, DATABASE_URL: '' }, {})).status, 200, 'version check needs no database');
 {
   const html = readFileSync(root + 'public/index.html', 'utf8');
   for (const re of [/name="app-version" content="([^"]+)"/, /\/app\.js\?v=([^"]+)"/, /\/style\.css\?v=([^"]+)"/]) {

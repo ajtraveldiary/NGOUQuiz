@@ -32,6 +32,7 @@
   }
   const API = window.QUIZ_API || {
     config: () => req('GET', '/api/config'),
+    version: () => req('GET', '/api/version'),
     register: (p) => req('POST', '/api/register', p),
     start: (playerKey) => req('POST', '/api/game/start', { playerKey }),
     next: (playerKey, gameId) => req('POST', '/api/game/next', { playerKey, gameId }),
@@ -108,6 +109,31 @@
   function show(name) {
     for (const s of screens) $('#screen-' + s).classList.toggle('is-active', s === name);
     scrollTo(0, 0);
+    if (name === 'splash') checkVersion();
+  }
+
+  // ---------- new version check ----------
+  // A phone can keep an old copy of the page open for days. When the server runs a newer version, load the new
+  // page (once per version, so a deploy that is still rolling out can't cause a reload loop). Checked when the game
+  // opens, whenever it comes back on screen, and on the opening screen; never during a game, on the player card
+  // or on the results (a player may be away sharing their score).
+  const PAGE_VERSION = document.querySelector('meta[name="app-version"]')?.content;
+  let lastCheck = 0;
+  function updateTo(v) {
+    if (!v || !PAGE_VERSION || v === PAGE_VERSION) return false;
+    let done = null;
+    try { done = sessionStorage.getItem('arivu.reloadedFor'); } catch { /* storage blocked */ }
+    if (done === v) return false;
+    try { sessionStorage.setItem('arivu.reloadedFor', v); } catch { /* storage blocked */ }
+    toast('Loading the new version…');
+    location.replace(location.pathname + '?v=' + encodeURIComponent(v));
+    return true;
+  }
+  async function checkVersion() {
+    const screen = screens.find((s) => $('#screen-' + s).classList.contains('is-active'));
+    if (!API.version || Date.now() - lastCheck < 20_000 || !['splash', 'rules', 'board'].includes(screen)) return;
+    lastCheck = Date.now();
+    try { updateTo((await API.version()).version); } catch { /* offline: try again next time */ }
   }
   let toastT;
   function toast(msg, ms = 3200) {
@@ -167,16 +193,8 @@
     try { S.cfg = await API.config(); } catch (e) { toast(e.message); S.cfg = null; }
     // A phone can keep an old cached copy of the page after an update. If the page is older than the
     // server, load the fresh page once (the guard stops a reload loop while a deploy is still rolling out).
-    const pageVersion = document.querySelector('meta[name="app-version"]')?.content;
-    if (S.cfg?.version && pageVersion && pageVersion !== S.cfg.version) {
-      let reloaded = null;
-      try { reloaded = sessionStorage.getItem('arivu.reloadedFor'); } catch { /* storage blocked */ }
-      if (reloaded !== S.cfg.version) {
-        try { sessionStorage.setItem('arivu.reloadedFor', S.cfg.version); } catch { /* storage blocked */ }
-        location.replace(location.pathname + '?v=' + encodeURIComponent(S.cfg.version));
-        return;
-      }
-    }
+    if (updateTo(S.cfg?.version)) return;
+    lastCheck = Date.now();
     const c = S.cfg || { title: 'Arivu Quiz', districts: [], areas: {}, totalQuestions: 10, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
     S.total = c.totalQuestions;
     const opts = (c.districts || []).map((d) => `<option>${esc(d)}</option>`).join('');
@@ -638,8 +656,11 @@
   });
   // Pause-proof: when the tab comes back, resync the clock with the server
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && $('#screen-quiz').classList.contains('is-active') && S.q && !S.answered) loadNext();
+    if (document.visibilityState !== 'visible') return;
+    if ($('#screen-quiz').classList.contains('is-active') && S.q && !S.answered) loadNext();
+    else checkVersion();
   });
+  addEventListener('pageshow', (e) => { if (e.persisted) checkVersion(); }); // page restored from the back/forward cache
 
   boot();
 })();

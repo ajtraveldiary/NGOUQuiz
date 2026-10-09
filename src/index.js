@@ -1037,7 +1037,7 @@ async function route(req, env) {
   }
   // Limits are checked before the database is touched
   const ip = req.headers.get('cf-connecting-ip') || 'local';
-  if (m === 'GET' && (p === '/api/config' || p === '/api/leaderboard')) await rateLimit(env, 'read', ip);
+  if (m === 'GET' && (p === '/api/config' || p === '/api/leaderboard' || p === '/api/version')) await rateLimit(env, 'read', ip);
   else if (p === '/api/register') await rateLimit(env, 'register', ip);
   else if (p.startsWith('/api/game/')) await rateLimit(env, 'gameIp', ip);
   else if (p.startsWith('/api/admin/')) await rateLimit(env, 'admin', ip);
@@ -1047,6 +1047,8 @@ async function route(req, env) {
     if (origin && origin !== url.origin) fail(403, 'Requests from other sites are not allowed.');
     if (!(req.headers.get('content-type') || '').includes('application/json')) fail(415, 'Send JSON.');
   }
+  // the game asks this when it opens or comes back on screen; no database needed
+  if (p === '/api/version' && m === 'GET') return json({ version: VERSION });
   await ensureSchema(env, db(env));
 
   if (p === '/api/config' && m === 'GET') return apiConfig(env);

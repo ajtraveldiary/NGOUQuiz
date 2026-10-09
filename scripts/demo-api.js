@@ -86,5 +86,6 @@
         timedOut: game.answers.filter((a) => a.state === 'timeout').length, marksLost: -game.answers.reduce((x, a) => x + Math.min(0, a.points), 0), attemptsLeft: null, district: me.district, overall: board(null), districtBoard: board(me.district) }, 400);
     },
     board: (district) => delay(board(district || null)),
+    version: () => delay({ version: typeof APP_VERSION === 'string' ? APP_VERSION : undefined }),
   };
 })();
