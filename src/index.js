@@ -445,14 +445,24 @@ async function apiNext(env, req) {
   const b = await body(req);
   const pid = await verifyPlayer(env, b.playerKey);
   const d = db(env);
-  let g = await loadGame(d, b.gameId, pid);
+  if (!UUID.test(String(b.gameId))) fail(400, 'Unknown game.');
+  // One round trip: start the clock if this question isn't served yet, and read the game with its question.
+  // The SELECT sees the row as it was before the UPDATE, so a question served just now has elapsed 0.
+  const r = await d.q(
+    `WITH serve AS (
+       UPDATE games SET served_at = now()
+       WHERE id = $1 AND player_id = $2 AND status = 'playing' AND served_at IS NULL AND current_index < cardinality(question_ids)
+       RETURNING id)
+     SELECT g.status, g.current_index, g.question_ids, g.option_orders, g.config, g.score, g.streak, g.id,
+       (EXTRACT(EPOCH FROM (now() - coalesce(g.served_at, now()))) * 1000)::int AS elapsed,
+       q.id AS q_id, q.question, q.options, q.difficulty, q.category, q.campaign
+     FROM games g LEFT JOIN questions q ON q.id = g.question_ids[g.current_index + 1]
+     WHERE g.id = $1 AND g.player_id = $2`, [b.gameId, pid]);
+  const g = r[0];
+  if (!g) fail(404, 'Game not found.');
   if (g.status !== 'playing' || g.current_index >= g.question_ids.length) return json({ done: true });
-  if (!g.served_at) {
-    await d.q(`UPDATE games SET served_at = now() WHERE id = $1 AND served_at IS NULL`, [g.id]);
-    g = await loadGame(d, b.gameId, pid);
-  }
   const idx = g.current_index;
-  const q = (await d.q(`SELECT question, options, difficulty, category, campaign FROM questions WHERE id = $1`, [g.question_ids[idx]]))[0];
+  const q = g.q_id ? g : null;
   if (!q) { // question was deleted while this game was in progress
     await d.q(`UPDATE games SET status = 'void', finished_at = now() WHERE id = $1`, [g.id]);
     fail(409, 'The questions were updated. Start a new game.');
@@ -474,12 +484,19 @@ async function apiAnswer(env, req) {
   const b = await body(req);
   const pid = await verifyPlayer(env, b.playerKey);
   const d = db(env);
-  const g = await loadGame(d, b.gameId, pid);
+  if (!UUID.test(String(b.gameId))) fail(400, 'Unknown game.');
+  const r = await d.q(
+    `SELECT g.*, (EXTRACT(EPOCH FROM (now() - g.served_at)) * 1000)::int AS elapsed,
+       q.id AS q_id, q.correct_index, q.difficulty AS q_difficulty, q.explanation, q.campaign
+     FROM games g LEFT JOIN questions q ON q.id = g.question_ids[g.current_index + 1]
+     WHERE g.id = $1 AND g.player_id = $2`, [b.gameId, pid]);
+  const g = r[0];
+  if (!g) fail(404, 'Game not found.');
   if (g.status !== 'playing') fail(409, 'This game is over.');
   if (!g.served_at || Number(b.index) !== g.current_index) fail(409, 'That question was already answered.');
   const idx = g.current_index;
   const qid = g.question_ids[idx];
-  const q = (await d.q(`SELECT correct_index, difficulty, explanation, campaign FROM questions WHERE id = $1`, [qid]))[0];
+  const q = g.q_id ? { correct_index: g.correct_index, difficulty: g.q_difficulty, explanation: g.explanation, campaign: g.campaign } : null;
   if (!q) {
     await d.q(`UPDATE games SET status = 'void', finished_at = now() WHERE id = $1`, [g.id]);
     fail(409, 'The questions were updated. Start a new game.');
@@ -509,20 +526,23 @@ async function apiAnswer(env, req) {
   const points = correct ? base + speed + streakPts : -penalty;
   const done = idx + 1 >= g.question_ids.length;
 
+  // One round trip: move the game on and record the answer (the answer row is written only if the move succeeded)
   const upd = await d.q(
-    `UPDATE games SET current_index = $3, served_at = NULL, score = score + $4,
-       correct_count = correct_count + $5, total_ms = total_ms + $6, streak = $7,
-       best_streak = GREATEST(best_streak, $7),
-       status = CASE WHEN $8 THEN 'finished' ELSE status END,
-       finished_at = CASE WHEN $8 THEN now() ELSE finished_at END
-     WHERE id = $1 AND current_index = $2 AND status = 'playing'
-     RETURNING score`,
-    [g.id, idx, idx + 1, points, correct ? 1 : 0, timeMs, streak, done]);
+    `WITH u AS (
+       UPDATE games SET current_index = $3, served_at = NULL, score = score + $4,
+         correct_count = correct_count + $5, total_ms = total_ms + $6, streak = $7,
+         best_streak = GREATEST(best_streak, $7),
+         status = CASE WHEN $8 THEN 'finished' ELSE status END,
+         finished_at = CASE WHEN $8 THEN now() ELSE finished_at END
+       WHERE id = $1 AND current_index = $2 AND status = 'playing'
+       RETURNING id, score),
+     a AS (
+       INSERT INTO answers (game_id, q_index, question_id, chosen_index, is_correct, time_ms, points, skipped)
+       SELECT u.id, $2::int, $9::int, $10::smallint, $11::boolean, $6::int, $4::int, $12::boolean FROM u
+       ON CONFLICT DO NOTHING)
+     SELECT score FROM u`,
+    [g.id, idx, idx + 1, points, correct ? 1 : 0, timeMs, streak, done, qid, chosenOrig, correct, skipped]);
   if (!upd[0]) fail(409, 'That question was already answered.');
-  await d.q(
-    `INSERT INTO answers (game_id, q_index, question_id, chosen_index, is_correct, time_ms, points, skipped)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING`,
-    [g.id, idx, qid, chosenOrig, correct, timeMs, points, skipped]);
 
   return json({
     correct, wrong, skipped, bonus: isBonus, timedOut: !skipped && (choice === null || late), correctChoice: order.indexOf(q.correct_index),
