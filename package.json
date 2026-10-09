@@ -1,6 +1,6 @@
 {
   "name": "ngo-union-quiz",
-  "version": "1.7.2",
+  "version": "1.8.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "deploy": "wrangler deploy",
     "seed:build": "node scripts/build-seed.mjs",
     "test": "node scripts/test-api.mjs",
+    "load": "node scripts/load-test.mjs",
     "local": "node scripts/local-server.mjs",
     "stamp": "node scripts/stamp-version.mjs"
   },

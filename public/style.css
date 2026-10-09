@@ -71,7 +71,7 @@ button { cursor: pointer; }
 .btn-brass:active { box-shadow: 0 2px 0 var(--brass-deep); }
 .btn-brass:disabled { opacity: .6; }
 .btn-ghost { background: transparent; border: 2px solid rgba(255, 255, 255, .28); color: #fff; }
-.btn-text { background: none; color: var(--mist); text-decoration: underline; text-underline-offset: 4px; font-weight: 500; font-size: 16px; padding: 8px; }
+.btn-text { background: none; color: var(--mist); text-decoration: underline; text-underline-offset: 4px; font-weight: 500; font-size: 16px; padding: 8px; min-height: 44px; }
 
 .sound {
   position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px; z-index: 30;

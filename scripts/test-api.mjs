@@ -161,7 +161,11 @@ console.log('✓ half-right game score', p3.res.score, 'rank', p3.res.overall.me
   const a1 = await ans(1, ((await peek(1)) + 1) % 4);            // wrong (easy): -25
   assert.equal(a1.wrong, true); assert.equal(a1.points, -25); assert.equal(a1.penalty, 25); assert.equal(a1.streak, 0);
   assert.equal(a1.score, a0.points - 25);
-  const a2 = await ans(2, 'skip');                               // skip: 0, no penalty
+  ok(await call('POST', '/api/game/next', { playerKey: reg.playerKey, gameId: st.gameId }), 'next4');
+  const early = await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st.gameId, index: 2, choice: 'skip' });
+  assert.equal(early.status, 400, 'no skip in the first 5 seconds');
+  await pg.query(`UPDATE games SET served_at = now() - interval '6 seconds' WHERE id = $1`, [st.gameId]);
+  const a2 = ok(await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st.gameId, index: 2, choice: 'skip' }), 'skip'); // skip: 0, no penalty
   assert.equal(a2.skipped, true); assert.equal(a2.points, 0); assert.equal(a2.score, a1.score); assert.equal(a2.timedOut, false);
   let last;
   for (let i = 3; i < st.total; i++) last = await ans(i, ((await peek(i)) + 1) % 4); // all wrong: score floors at 0
@@ -185,6 +189,7 @@ console.log('✓ half-right game score', p3.res.score, 'rank', p3.res.overall.me
   for (let i = 0; i < st2.total; i++) {
     const nx = ok(await call('POST', '/api/game/next', { playerKey: reg.playerKey, gameId: st2.gameId }), 'next4b');
     assert.equal(!!nx.bonus, i === st2.total - 1);
+    await pg.query(`UPDATE games SET served_at = now() - interval '6 seconds' WHERE id = $1`, [st2.gameId]);
     b = ok(await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st2.gameId, index: i, choice: i === st2.total - 1 ? await peek2(i) : 'skip' }), 'ans4b');
   }
   assert.equal(b.bonus, true); assert.equal(b.correct, true); assert.ok(b.points > 0); assert.equal(b.done, true);
@@ -395,4 +400,24 @@ assert.match((await callEnv(noUrl, 'GET', '/api/config')).body.error, /DATABASE_
 assert.match((await callEnv({ ...noUrl, DATABASE_URL: 'mysql://x' }, 'GET', '/api/health')).body.error, /should start with postgresql/);
 console.log('✓ auto setup: empty database, old database upgrade, clear config errors');
 console.log('✓ admin: stats, question CRUD, import, players, void/restore, exports, settings');
+// Rate limits (in-Worker counter here; Cloudflare's binding when deployed) and requests from other sites
+{
+  const at = (ip) => ({ 'cf-connecting-ip': ip });
+  let r;
+  for (let i = 0; i < 121; i++) r = await call('GET', '/api/config', undefined, at('203.0.113.1'));
+  assert.equal(r.status, 429, 'reads are limited per address');
+  assert.equal(r.headers.get('retry-after'), '60');
+  assert.equal((await call('GET', '/api/config', undefined, at('203.0.113.2'))).status, 200, 'other addresses are not affected');
+  for (let i = 0; i < 21; i++) r = await call('POST', '/api/register', { name: 'Bot', office: 'DHS', district: 'Kottayam', phone: String(9100000000 + i) }, at('203.0.113.3'));
+  assert.equal(r.status, 429, 'player cards are limited per address');
+  const bot = ok(await call('POST', '/api/register', { name: 'Bot', office: 'DHS', district: 'Kottayam', phone: '9100000099' }, at('203.0.113.4')), 'bot reg');
+  for (let i = 0; i < 11; i++) r = await call('POST', '/api/game/start', { playerKey: bot.playerKey }, at('203.0.113.' + (10 + i)));
+  assert.equal(r.status, 429, 'new games are limited per player, whatever the address');
+  const other = { name: 'Elsewhere', office: 'DHS', district: 'Kottayam', phone: '9100000098' };
+  assert.equal((await call('POST', '/api/register', other, { origin: 'https://evil.example' })).status, 403, 'other sites cannot post');
+  assert.equal((await call('POST', '/api/register', other, { origin: 'https://quiz.test' })).status, 200, 'the game itself can');
+  const denied = await worker.fetch(new Request('https://quiz.test/api/config'), { ...env, RL_READ: { limit: async () => ({ success: false }) } }, {});
+  assert.equal(denied.status, 429, 'uses the Cloudflare binding when present');
+  console.log('✓ rate limits per address and per player, Retry-After, other sites blocked, Cloudflare binding used');
+}
 console.log('\nAll API tests passed.');

@@ -57,6 +57,7 @@ export const DEFAULT_SETTINGS = {
 };
 
 const GRACE_MS = 400;          // network allowance subtracted from measured time
+const SKIP_AFTER_MS = 5000;    // Skip opens this long into a question (the game shows a countdown on the button)
 const LATE_MS = 1500;          // answers arriving later than limit + this count as timeouts
 const RESUME_WINDOW = '1 hour';
 
@@ -67,8 +68,8 @@ const json = (data, status = 200, headers = {}) =>
     status,
     headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers },
   });
-class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
-const fail = (status, msg) => { throw new HttpError(status, msg); };
+class HttpError extends Error { constructor(status, msg, headers) { super(msg); this.status = status; this.headers = headers; } }
+const fail = (status, msg, headers) => { throw new HttpError(status, msg, headers); };
 
 async function body(req) {
   const text = await req.text();
@@ -259,28 +260,34 @@ function boardCte(withDistrict) {
       FROM best
     )`;
 }
-async function leaderboard(d, district, playerId) {
+// With env, the public part (top 10, counts) is reused for 10 seconds; the player's own rank is always fresh.
+// The queries run side by side.
+async function leaderboard(d, district, playerId, env = null) {
   const params = district ? [district] : [];
-  const top = await d.q(
-    `${boardCte(!!district)}
-     SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.office, p.district, p.area
-     FROM ranked r JOIN players p ON p.id = r.player_id
-     ORDER BY r.rank LIMIT 10`, params);
-  const totalRow = await d.q(`${boardCte(!!district)} SELECT count(*)::int AS n FROM ranked`, params);
-  let me = null;
-  if (playerId) {
-    const r = await d.q(
+  const pub = async () => {
+    const [top, totalRow, plays] = await Promise.all([
+      d.q(`${boardCte(!!district)}
+        SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.office, p.district, p.area
+        FROM ranked r JOIN players p ON p.id = r.player_id
+        ORDER BY r.rank LIMIT 10`, params),
+      d.q(`${boardCte(!!district)} SELECT count(*)::int AS n FROM ranked`, params),
+      district || !env ? null : playCount(d), // the play count is only shown on the opening screen
+    ]);
+    return { top, total: totalRow[0]?.n || 0, plays };
+  };
+  const [board, meRows] = await Promise.all([
+    env ? memo(env, 'board:' + (district || ''), 10_000, pub) : pub(),
+    playerId ? d.q(
       `${boardCte(!!district)}
        SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.office, p.district, p.area
        FROM ranked r JOIN players p ON p.id = r.player_id WHERE r.player_id = $${params.length + 1}`,
-      [...params, playerId]);
-    me = r[0] || null;
-  }
+      [...params, playerId]) : [],
+  ]);
   const map = (x) => x && ({
     rank: x.rank, score: x.score, timeMs: x.total_ms, correct: x.correct_count,
     name: x.name, office: x.office, district: x.district, area: x.area || null, isMe: x.player_id === playerId,
   });
-  return { top: top.map(map), me: map(me), total: totalRow[0]?.n || 0, ...(district ? {} : { plays: await playCount(d) }) };
+  return { top: board.top.map(map), me: map(meRows[0] || null), total: board.total, ...(district ? {} : { plays: board.plays }) };
 }
 // Every game started counts as a play (voided games don't), and so does filling in the player card:
 // a player who registered but never started a game counts once
@@ -292,6 +299,9 @@ async function playCount(d) {
 
 // ---------- public API ----------
 async function apiConfig(env) {
+  return json(await memo(env, 'config', 10_000, () => configData(env)));
+}
+async function configData(env) {
   const d = db(env);
   const s = await getSettings(d);
   const counts = await d.q(`SELECT difficulty, count(*) FILTER (WHERE NOT campaign)::int AS n,
@@ -300,7 +310,7 @@ async function apiConfig(env) {
   const total = LEVELS.reduce((t, l) => t + Math.min(s[l], avail[l] || 0), 0);
   const hasBonus = s.bonusQuestion !== false && counts.some((c) => c.c > 0);
   const areas = await getAreas(d);
-  return json({
+  return ({
     title: s.title, subtitle: s.subtitle, tagline: s.tagline, values: s.values,
     districts: DISTRICTS, areas, levels: { easy: s.easy, medium: s.medium, hard: s.hard },
     totalQuestions: total || s.easy + s.medium + s.hard,
@@ -332,6 +342,7 @@ async function apiRegister(env, req) {
      RETURNING id, name, office, district, area, phone, (xmax = 0) AS created`,
     [name, office, district, area, phone]);
   const p = rows[0];
+  if (p.created) memoClear(env); // a new player card counts as a play straight away
   const stats = await d.q(
     `SELECT count(*) FILTER (WHERE status <> 'void')::int AS played, max(score) FILTER (WHERE status = 'finished') AS best
      FROM games WHERE player_id = $1`, [p.id]);
@@ -402,6 +413,7 @@ function pickRegular(pool, counts, mix) {
 async function apiStart(env, req) {
   const b = await body(req);
   const pid = await verifyPlayer(env, b.playerKey);
+  await rateLimit(env, 'start', pid);
   const d = db(env);
   const s = await getSettings(d);
   if (!s.open) fail(403, 'The quiz is closed right now. Watch for the next round.');
@@ -444,6 +456,7 @@ async function loadGame(d, gameId, pid) {
 async function apiNext(env, req) {
   const b = await body(req);
   const pid = await verifyPlayer(env, b.playerKey);
+  await rateLimit(env, 'play', pid);
   const d = db(env);
   if (!UUID.test(String(b.gameId))) fail(400, 'Unknown game.');
   // One round trip: start the clock if this question isn't served yet, and read the game with its question.
@@ -483,6 +496,7 @@ async function apiNext(env, req) {
 async function apiAnswer(env, req) {
   const b = await body(req);
   const pid = await verifyPlayer(env, b.playerKey);
+  await rateLimit(env, 'play', pid);
   const d = db(env);
   if (!UUID.test(String(b.gameId))) fail(400, 'Unknown game.');
   const r = await d.q(
@@ -508,6 +522,8 @@ async function apiAnswer(env, req) {
 
   // choice: option index, 'skip' (no penalty), or null (time ran out, no penalty)
   const skipped = b.choice === 'skip';
+  // 1 s of slack for clock drift; the game itself never sends an early skip
+  if (skipped && (g.elapsed || 0) < SKIP_AFTER_MS - 1000) fail(400, 'Skip opens 5 seconds into the question.');
   const choice = skipped || b.choice === null || b.choice === undefined ? null : Number(b.choice);
   if (choice !== null && !(Number.isInteger(choice) && choice >= 0 && choice < order.length)) fail(400, 'Invalid option.');
   const elapsed = Math.max(0, (g.elapsed || 0) - GRACE_MS);
@@ -543,6 +559,7 @@ async function apiAnswer(env, req) {
      SELECT score FROM u`,
     [g.id, idx, idx + 1, points, correct ? 1 : 0, timeMs, streak, done, qid, chosenOrig, correct, skipped]);
   if (!upd[0]) fail(409, 'That question was already answered.');
+  if (done) memoClear(env); // the new score shows on the leaderboard straight away
 
   return json({
     correct, wrong, skipped, bonus: isBonus, timedOut: !skipped && (choice === null || late), correctChoice: order.indexOf(q.correct_index),
@@ -556,19 +573,25 @@ async function apiAnswer(env, req) {
 async function apiResult(env, req) {
   const b = await body(req);
   const pid = await verifyPlayer(env, b.playerKey);
+  await rateLimit(env, 'play', pid);
   const d = db(env);
-  const g = await loadGame(d, b.gameId, pid);
+  // Two batches of queries that run side by side, instead of one after another
+  const [g, s, pl] = await Promise.all([
+    loadGame(d, b.gameId, pid), getSettings(d),
+    d.q(`SELECT p.name, p.district,
+        (SELECT id FROM games WHERE player_id = p.id AND status = 'finished'
+         ORDER BY score DESC, total_ms ASC, finished_at ASC LIMIT 1) AS best_id,
+        (SELECT count(*)::int FROM games WHERE player_id = p.id AND status <> 'void') AS played
+      FROM players p WHERE p.id = $1`, [pid]),
+  ]);
   if (g.status === 'playing') fail(409, 'Finish the game first.');
-  const s = await getSettings(d);
-  const player = (await d.q(`SELECT name, district FROM players WHERE id = $1`, [pid]))[0];
-  const answers = await d.q(`SELECT a.is_correct, a.points, a.skipped, a.chosen_index, a.q_index, coalesce(q.campaign, false) AS campaign
-    FROM answers a LEFT JOIN questions q ON q.id = a.question_id WHERE a.game_id = $1 ORDER BY a.q_index`, [g.id]);
+  const player = pl[0], best = { id: player.best_id }, played = player.played;
+  const [answers, overall, district] = await Promise.all([
+    d.q(`SELECT a.is_correct, a.points, a.skipped, a.chosen_index, a.q_index, coalesce(q.campaign, false) AS campaign
+      FROM answers a LEFT JOIN questions q ON q.id = a.question_id WHERE a.game_id = $1 ORDER BY a.q_index`, [g.id]),
+    leaderboard(d, null, pid), leaderboard(d, player.district, pid),
+  ]);
   const state = (a) => (a.is_correct ? 'right' : a.skipped ? 'skipped' : a.chosen_index === null ? 'timeout' : 'wrong');
-  const best = (await d.q(
-    `SELECT id FROM games WHERE player_id = $1 AND status = 'finished'
-     ORDER BY score DESC, total_ms ASC, finished_at ASC LIMIT 1`, [pid]))[0];
-  const played = (await d.q(`SELECT count(*)::int AS n FROM games WHERE player_id = $1 AND status <> 'void'`, [pid]))[0].n;
-  const [overall, district] = await Promise.all([leaderboard(d, null, pid), leaderboard(d, player.district, pid)]);
   return json({
     score: g.score, correct: g.correct_count, total: g.question_ids.length, timeMs: g.total_ms,
     bestStreak: g.best_streak, voided: g.status === 'void',
@@ -590,7 +613,8 @@ async function apiLeaderboard(env, url) {
   let pid = null;
   const key = url.searchParams.get('key');
   if (key) { try { pid = await verifyPlayer(env, key); } catch { pid = null; } }
-  return json(await leaderboard(db(env), district || null, pid), 200, { 'cache-control': 'public, max-age=15' });
+  // not cached in the browser: a leaderboard opened right after a game must show it (the server keeps a 10 s copy)
+  return json(await leaderboard(db(env), district || null, pid, env));
 }
 
 // ---------- admin API ----------
@@ -907,6 +931,54 @@ async function adminSettings(env, req) {
   return json(next);
 }
 
+// ---------- rate limits ----------
+// Requests per minute. Uses Cloudflare's rate-limit bindings when wrangler.toml declares them ([[ratelimits]],
+// same names and numbers), otherwise a counter inside this Worker instance (best effort; local server and tests).
+// Per-address limits are generous because many phones on one mobile network, or one office, share an address.
+const LIMITS = {
+  read: { binding: 'RL_READ', limit: 120 },          // config, leaderboard (per address)
+  register: { binding: 'RL_REGISTER', limit: 20 },   // player cards (per address)
+  gameIp: { binding: 'RL_GAME_IP', limit: 600 },     // all game requests (per address)
+  start: { binding: 'RL_START', limit: 10 },         // new games (per player)
+  play: { binding: 'RL_PLAY', limit: 90 },           // next question / answer / result (per player)
+  admin: { binding: 'RL_ADMIN', limit: 300 },        // admin page requests (per address)
+};
+const hits = new Map();
+async function rateLimit(env, kind, key) {
+  const { binding, limit } = LIMITS[kind];
+  const k = `${kind}:${key}`;
+  const tooMany = () => fail(429, 'Too many requests. Wait a minute and try again.', { 'retry-after': '60' });
+  if (env[binding]?.limit) {
+    const { success } = await env[binding].limit({ key: k });
+    if (!success) tooMany();
+    return;
+  }
+  const w = Math.floor(Date.now() / 60_000);
+  const h = hits.get(k);
+  if (!h || h.w !== w) {
+    if (hits.size > 20_000) for (const [x, v] of hits) if (v.w !== w) hits.delete(x);
+    hits.set(k, { w, n: 1 });
+    return;
+  }
+  if (++h.n > limit) tooMany();
+}
+
+// ---------- short cache for public reads ----------
+// The opening screen asks for the settings and the leaderboard on every visit. Within one Worker instance,
+// the same answer is reused for a few seconds instead of reading the database each time.
+const memoStore = new Map(); // per database
+async function memo(env, key, ms, fn) {
+  const dbKey = env.__db || env.DATABASE_URL;
+  let m = memoStore.get(dbKey);
+  if (!m) memoStore.set(dbKey, (m = new Map()));
+  const hit = m.get(key);
+  if (hit && hit.until > Date.now()) return hit.value;
+  const value = await fn();
+  m.set(key, { value, until: Date.now() + ms });
+  return value;
+}
+const memoClear = (env) => memoStore.delete(env.__db || env.DATABASE_URL);
+
 // ---------- router ----------
 async function route(req, env) {
   const url = new URL(req.url);
@@ -946,8 +1018,19 @@ async function route(req, env) {
       return json({ ok: false, error: msg }, 500);
     }
   }
+  // Limits are checked before the database is touched
+  const ip = req.headers.get('cf-connecting-ip') || 'local';
+  if (m === 'GET' && (p === '/api/config' || p === '/api/leaderboard')) await rateLimit(env, 'read', ip);
+  else if (p === '/api/register') await rateLimit(env, 'register', ip);
+  else if (p.startsWith('/api/game/')) await rateLimit(env, 'gameIp', ip);
+  else if (p.startsWith('/api/admin/')) await rateLimit(env, 'admin', ip);
+  if (m !== 'GET') {
+    // Changes can only come from this site's own pages (a browser always sends Origin on these requests)
+    const origin = req.headers.get('origin');
+    if (origin && origin !== url.origin) fail(403, 'Requests from other sites are not allowed.');
+    if (!(req.headers.get('content-type') || '').includes('application/json')) fail(415, 'Send JSON.');
+  }
   await ensureSchema(env, db(env));
-  if (m === 'POST' && !(req.headers.get('content-type') || '').includes('application/json')) fail(415, 'Send JSON.');
 
   if (p === '/api/config' && m === 'GET') return apiConfig(env);
   if (p === '/api/register' && m === 'POST') return apiRegister(env, req);
@@ -960,6 +1043,7 @@ async function route(req, env) {
   if (p === '/api/admin/login' && m === 'POST') return adminLogin(env, req);
   if (p.startsWith('/api/admin/')) {
     await requireAdmin(env, req);
+    if (m !== 'GET') memoClear(env); // admin changes show on the game straight away
     const parts = p.split('/').slice(3); // after /api/admin
     const id = parts[1];
     if (parts[0] === 'stats' && m === 'GET') return adminStats(env);
@@ -998,7 +1082,7 @@ export default {
       if (env.ASSETS) return env.ASSETS.fetch(req);
       return new Response('Not found', { status: 404 });
     } catch (e) {
-      if (e instanceof HttpError) return json({ error: e.message }, e.status);
+      if (e instanceof HttpError) return json({ error: e.message }, e.status, e.headers);
       console.error(e);
       return json({ error: explainDbError(e) || 'Something went wrong on the server. Try again.' }, 500);
     }

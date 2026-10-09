@@ -3,6 +3,19 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.8.1
+- Skip opens 5 seconds into each question; until then the button is locked and counts down ("Skip question in 4s"). The server refuses an earlier skip too, so a script can't skip through questions to collect the answers. Replaces the 1.2-second lock from 1.6.4
+
+## 1.8.0 — protection against bots, full test pass
+- Rate limits, checked before the database is touched. Requests per minute: 120 reads (settings, leaderboard) and 20 player cards per internet address; 600 game requests per address; 10 new games and 90 questions/answers/results per player; 300 admin requests per address. Over the limit the server answers 429 "Too many requests. Wait a minute and try again." Uses Cloudflare's rate-limit bindings (`[[ratelimits]]` in wrangler.toml), with a counter inside the Worker as a fallback. Per-address limits are generous because many phones on one mobile network or office share an address
+- Changes (POST) from other websites are refused
+- The settings and the public leaderboard are reused for 10 seconds inside the Worker instead of read from the database on every visit (cleared when a game finishes, a new player registers or an admin saves)
+- Results: database work runs in 2 parallel batches instead of 7 steps one after another
+- Fix: the leaderboard screen could show the list from before your game for up to 15 seconds (browser cache); it is now always fresh
+- Flag emblem 21 KB instead of 58 KB (`logo.webp`, sized for the screen)
+- "See the leaderboard" link is easier to tap (44 px)
+- `npm run load [players]`: plays full games for many players at once and checks the stored results
+
 ## 1.7.2
 - Opening screen: the "days to go" number counts up from 0, like the stats
 
