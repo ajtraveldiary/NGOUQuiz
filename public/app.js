@@ -148,7 +148,9 @@
     const w = campaignWhen();
     const big = w.days > 1 ? String(w.days) : w.days === 1 ? '1' : w.days === 0 ? 'Today' : '✓';
     const unit = w.days > 1 ? 'days to go' : w.days === 1 ? 'day to go' : w.days === 0 ? 'Join us' : 'Held';
-    $('#tkBig').textContent = big; $('#tkUnit').textContent = unit;
+    // the number of days counts up from 0, like the stats below it
+    if (w.days > 1) countUp($('#tkBig'), 0, w.days, 900); else $('#tkBig').textContent = big;
+    $('#tkUnit').textContent = unit;
     $('#tkBig').style.fontSize = big.length > 3 ? '30px' : '';
     $('#campKicker').textContent = w.days > 0 ? `See you on ${w.short}. ${w.days} day${w.days === 1 ? '' : 's'} to go.` : w.days === 0 ? 'It is today. Join us.' : `Held on ${w.short}.`;
   }
