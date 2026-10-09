@@ -191,7 +191,7 @@ pre.sample { background: #F6F8F4; border-radius: 10px; padding: 10px; font-size:
     <section data-view="players" hidden>
       <h2>Players and scores</h2>
       <div class="toolbar">
-        <input type="search" id="pSearch" placeholder="Name">
+        <input type="search" id="pSearch" placeholder="Name or office">
         <select id="pDistrict"><option value="">All districts</option></select>
         <span class="grow"></span>
         <button class="btn ghost sm" data-export="leaderboard">Leaderboard CSV</button>
@@ -632,10 +632,10 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     if (!districts.length) { const s = await api('GET', 'stats'); districts = s.districts; $('#pDistrict').insertAdjacentHTML('beforeend', districts.map((d) => `<option>${esc(d)}</option>`).join('')); }
     const p = new URLSearchParams({ q: $('#pSearch').value.trim(), district: $('#pDistrict').value, page });
     const r = await api('GET', 'players?' + p);
-    $('#pTable').innerHTML = `<tr><th>Name</th><th>District</th><th class="num">Games</th><th class="num">Best</th><th class="num">Right</th><th>Last played</th></tr>` +
-      (r.players.map((x) => `<tr class="click" data-id="${x.id}"><td><b>${esc(x.name)}</b></td><td>${esc(x.district)}</td>
+    $('#pTable').innerHTML = `<tr><th>Name</th><th>District</th><th>Office</th><th class="num">Games</th><th class="num">Best</th><th class="num">Right</th><th>Last played</th></tr>` +
+      (r.players.map((x) => `<tr class="click" data-id="${x.id}"><td><b>${esc(x.name)}</b></td><td>${esc(x.district)}</td><td>${esc(x.office || '')}</td>
         <td class="num">${x.games}</td><td class="num"><b>${x.best == null ? '–' : fmt(x.best)}</b></td><td class="num">${x.best_correct ?? '–'}</td><td>${when(x.last_played)}</td></tr>`).join('') ||
-      '<tr><td colspan="6" class="hint">No players match.</td></tr>');
+      '<tr><td colspan="7" class="hint">No players match.</td></tr>');
     $('#pInfo').textContent = r.total ? `${page * 50 + 1}–${Math.min(r.total, page * 50 + 50)} of ${fmt(r.total)}` : '';
     $('#pPrev').disabled = page === 0; $('#pNext').disabled = (page + 1) * 50 >= r.total;
   }
@@ -652,7 +652,7 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     r.answers.forEach((a) => (byGame[a.game_id] ||= []).push(a));
     $('#pBox').innerHTML = `
       <div class="toolbar" style="margin:0"><h2 class="grow" style="margin:0">${esc(p.name)}</h2><button class="btn ghost sm" data-close>Close</button></div>
-      <p class="hint" style="margin:0">${esc(p.district)}. Registered ${when(p.created_at)}.</p>
+      <p class="hint" style="margin:0">${esc([p.office, p.district].filter(Boolean).join(', '))}. Registered ${when(p.created_at)}.</p>
       ${r.games.map((g) => `
         <div class="game${g.status === 'void' ? ' void' : ''}">
           <header><b>${fmt(g.score)}</b><span>${g.correct_count}/${g.total} right, ${(g.total_ms / 1000).toFixed(1)}s, best streak ${g.best_streak}</span>

@@ -221,7 +221,7 @@
   // A card always starts empty: saving it makes a new player (only a name and district are asked)
   function openRegister() {
     const f = $('#regForm');
-    f.name.value = ''; f.district.value = '';
+    f.name.value = ''; f.district.value = ''; f.office.value = '';
     updateAvatar(); $('#regError').textContent = '';
     show('register');
     setTimeout(() => f.name.focus(), 350);
@@ -234,7 +234,7 @@
     e.preventDefault();
     const f = e.target, err = $('#regError');
     f.querySelectorAll('.invalid').forEach((x) => x.classList.remove('invalid'));
-    const data = { name: f.name.value.trim(), district: f.district.value };
+    const data = { name: f.name.value.trim(), district: f.district.value, office: f.office.value.trim() };
     const bad = (el, msg) => { el.classList.add('invalid'); el.focus(); err.textContent = msg; buzz(60); };
     if (data.name.length < 2) return bad(f.name, 'Enter your name or a nickname.');
     if (!data.district) return bad(f.district, 'Choose your district.');

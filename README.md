@@ -2,7 +2,7 @@
 
 Mobile-first quiz game on **Cloudflare Workers + Neon Postgres**.
 
-- Player card asks only for a name (or nickname) and one of Kerala's 14 districts; no phone number or office. A player is known by the key saved on their phone → rules card → 3‑2‑1 countdown → 10 timed questions → score, rank and Top 10.
+- Player card asks for a name (or nickname), one of Kerala's 14 districts and, optionally, an office name (government employees fill it in; members of the public leave it blank). No phone number. The office is visible to admins only. A player is known by the key saved on their phone → rules card → 3‑2‑1 countdown → 10 timed questions → score, rank and Top 10.
 - Questions march from easy to hard (default 4 easy, 4 medium, 2 hard, picked at random from the pool every game). Option order is shuffled per player so "the answer is B" can't be passed around.
 - Scoring per right answer: **level points + speed bonus + streak bonus**
   - Level points: easy 100, medium 150, hard 200
