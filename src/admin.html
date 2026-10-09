@@ -234,13 +234,6 @@ pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size:
     <section data-view="settings" hidden>
       <h2>Game settings</h2>
       <form class="panel grid" id="setForm" style="max-width:720px">
-        <h3>Quiz identity</h3>
-        <div class="row2">
-          <label>Quiz title <input name="title" maxlength="60"></label>
-          <label>Organisation line <input name="subtitle" maxlength="100"></label>
-        </div>
-        <label>Tagline <input name="tagline" maxlength="140"></label>
-        <label>Values shown on the welcome screen (one per line) <textarea name="values" rows="4"></textarea></label>
         <h3>Game</h3>
         <div class="row2">
           <label>Easy questions per game <input name="easy" type="number" min="0" max="30"></label>
@@ -737,8 +730,7 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
   async function loadSettings() {
     const s = await api('GET', 'settings'), f = $('#setForm');
     $('#liveTitle').textContent = s.title;
-    ['title', 'subtitle', 'tagline', 'easy', 'medium', 'hard', 'timeLimitSec', 'streakBonus', 'streakCap', 'maxAttempts'].forEach((k) => (f[k].value = s[k]));
-    f.values.value = (s.values || []).join('\n');
+    ['easy', 'medium', 'hard', 'timeLimitSec', 'streakBonus', 'streakCap', 'maxAttempts'].forEach((k) => (f[k].value = s[k]));
     f.p_easy.value = s.points.easy; f.p_medium.value = s.points.medium; f.p_hard.value = s.points.hard;
     f.n_easy.value = s.penalty.easy; f.n_medium.value = s.penalty.medium; f.n_hard.value = s.penalty.hard;
     f.open.checked = s.open; f.showExplanation.checked = s.showExplanation; f.bonusQuestion.checked = s.bonusQuestion !== false;
@@ -752,8 +744,6 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     e.preventDefault();
     const f = e.target;
     const data = {
-      title: f.title.value, subtitle: f.subtitle.value, tagline: f.tagline.value,
-      values: f.values.value.split('\n').map((v) => v.trim()).filter(Boolean),
       easy: f.easy.value, medium: f.medium.value, hard: f.hard.value, timeLimitSec: f.timeLimitSec.value,
       points: { easy: f.p_easy.value, medium: f.p_medium.value, hard: f.p_hard.value },
       penalty: { easy: f.n_easy.value, medium: f.n_medium.value, hard: f.n_hard.value },

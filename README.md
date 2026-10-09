@@ -60,7 +60,7 @@ npm test             # end-to-end API tests on an in-memory Postgres
 | Districts & areas | Add areas under each of the 15 districts (paste a comma-separated list), rename (also updates players who chose it) or delete. A district with no areas skips the area question |
 | Questions | Search and filter; add / edit (2–6 options, Malayalam works); hide or delete (questions already answered are hidden instead, so history stays); import CSV |
 | Players & scores | Search by name, office or phone; filter by district; open a player to see every game and every answer; void a game to remove it from the board |
-| Settings | Title, organisation line, tagline, values shown on the welcome screen; questions per level; seconds per question; points; streak bonus; attempts per player; open/close the quiz; show explanations |
+| Settings | Questions per level; seconds per question; points; streak bonus; attempts per player; open/close the quiz; show explanations |
 
 **CSV format** for importing questions (UTF‑8):
 

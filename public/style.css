@@ -85,6 +85,7 @@ button { cursor: pointer; }
 .flag-cloth { fill: var(--red); filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .35)); }
 @keyframes wave { 50% { transform: skewY(-3deg) scaleX(.95); } }
 .org { margin: 18px 0 0; color: var(--mist); font-weight: 600; font-size: 15px; }
+.org .presents { font-weight: 500; font-style: italic; color: var(--mist-2); }
 .game-title {
   margin: 0; font-family: var(--display); font-weight: 900; line-height: .82;
   font-size: clamp(88px, 30vw, 132px); letter-spacing: -.01em; text-transform: uppercase;
