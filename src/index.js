@@ -701,7 +701,7 @@ function validateQuestion(b) {
     category: clean(b.category, 60) || null, explanation: String(b.explanation || '').trim().slice(0, 600) || null,
     topic: clean(b.topic, 60) || null,
     campaign: b.campaign === true || ['true', 'yes', 'y', '1'].includes(String(b.campaign ?? '').trim().toLowerCase()),
-    active: b.active !== false,
+    active: !(b.active === false || ['no', 'n', 'false', '0'].includes(String(b.active ?? '').trim().toLowerCase())),
   };
 }
 
@@ -738,20 +738,36 @@ async function adminDeleteQuestion(env, id) {
   await d.q(`DELETE FROM questions WHERE id = $1`, [id]);
   return json({ deleted: true });
 }
+// A row updates an existing question when its id matches, or else when its question text matches exactly;
+// every other row is added. Rows left out of the file are not touched (hide a question with active = no).
+// All of it is saved in one transaction, so a file is applied completely or not at all.
 async function adminImport(env, req) {
   const b = await body(req);
   const list = Array.isArray(b.questions) ? b.questions : [];
   if (!list.length) fail(400, 'No questions found in the file.');
-  if (list.length > 500) fail(400, 'Import up to 500 questions at a time.');
-  const vs = list.map(validateQuestion);
-  const params = [];
-  const values = vs.map((v) => {
-    params.push(v.question, JSON.stringify(v.options), v.correct, v.difficulty, v.category, v.explanation, v.topic, v.campaign);
-    const n = params.length;
-    return `($${n - 7}, $${n - 6}::jsonb, $${n - 5}, $${n - 4}, $${n - 3}, $${n - 2}, $${n - 1}, $${n})`;
-  });
-  await db(env).q(`INSERT INTO questions (question, options, correct_index, difficulty, category, explanation, topic, campaign) VALUES ${values.join(',')}`, params);
-  return json({ imported: vs.length });
+  if (list.length > 1000) fail(400, 'Import up to 1,000 questions at a time.');
+  const vs = list.map((x) => ({ ...validateQuestion(x), id: /^\d+$/.test(String(x.id ?? '').trim()) ? Number(x.id) : null }));
+  const d = db(env);
+  const existing = await d.q(`SELECT id, question FROM questions`);
+  const ids = new Set(existing.map((r) => r.id)), byText = new Map(existing.map((r) => [r.question.trim(), r.id]));
+  const steps = [], seen = new Set();
+  let added = 0, updated = 0;
+  for (const v of vs) {
+    const id = v.id && ids.has(v.id) ? v.id : byText.get(v.question) ?? null;
+    const params = [v.question, JSON.stringify(v.options), v.correct, v.difficulty, v.category, v.explanation, v.active, v.topic, v.campaign];
+    if (id) {
+      if (seen.has(id)) fail(400, `Question ${id} is in the file twice ("${v.question.slice(0, 40)}").`);
+      seen.add(id); updated++;
+      steps.push([`UPDATE questions SET question = $1, options = $2::jsonb, correct_index = $3, difficulty = $4, category = $5,
+        explanation = $6, active = $7, topic = $8, campaign = $9, updated_at = now() WHERE id = $10`, [...params, id]]);
+    } else {
+      added++;
+      steps.push([`INSERT INTO questions (question, options, correct_index, difficulty, category, explanation, active, topic, campaign)
+        VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8, $9)`, params]);
+    }
+  }
+  if (d.tx) await d.tx(steps); else for (const [q, p] of steps) await d.q(q, p);
+  return json({ imported: vs.length, added, updated });
 }
 
 async function adminPlayers(env, url) {
@@ -860,11 +876,11 @@ async function adminExport(env, url) {
       FROM games g JOIN players p ON p.id = g.player_id ORDER BY g.started_at DESC`);
     rows = r.map((x) => [x.id, x.name, x.office, x.district, x.area, x.phone, x.status, x.score, x.correct_count, x.wrong, x.skipped, x.lost, x.total, (x.total_ms / 1000).toFixed(1), x.best_streak, x.started_at, x.finished_at]);
   } else if (type === 'questions') {
-    head = ['difficulty', 'category', 'topic', 'campaign', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'option_f', 'correct', 'explanation', 'active'];
+    head = ['id', 'difficulty', 'category', 'topic', 'campaign', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'option_f', 'correct', 'explanation', 'active'];
     const r = await d.q(`SELECT * FROM questions ORDER BY id`);
     rows = r.map((x) => {
       const o = [...x.options, '', '', '', '', '', ''].slice(0, 6);
-      return [x.difficulty, x.category, x.topic, x.campaign ? 'yes' : '', x.question, ...o, 'ABCDEF'[x.correct_index], x.explanation, x.active];
+      return [x.id, x.difficulty, x.category, x.topic, x.campaign ? 'yes' : '', x.question, ...o, 'ABCDEF'[x.correct_index], x.explanation, x.active ? 'yes' : 'no'];
     });
   } else {
     head = ['Name', 'Office', 'District', 'Area', 'Phone', 'Registered', 'Games', 'Best score'];
@@ -1021,7 +1037,7 @@ async function route(req, env) {
   }
   // Limits are checked before the database is touched
   const ip = req.headers.get('cf-connecting-ip') || 'local';
-  if (m === 'GET' && (p === '/api/config' || p === '/api/leaderboard')) await rateLimit(env, 'read', ip);
+  if (m === 'GET' && (p === '/api/config' || p === '/api/leaderboard' || p === '/api/version')) await rateLimit(env, 'read', ip);
   else if (p === '/api/register') await rateLimit(env, 'register', ip);
   else if (p.startsWith('/api/game/')) await rateLimit(env, 'gameIp', ip);
   else if (p.startsWith('/api/admin/')) await rateLimit(env, 'admin', ip);
@@ -1031,6 +1047,8 @@ async function route(req, env) {
     if (origin && origin !== url.origin) fail(403, 'Requests from other sites are not allowed.');
     if (!(req.headers.get('content-type') || '').includes('application/json')) fail(415, 'Send JSON.');
   }
+  // the game asks this when it opens or comes back on screen; no database needed
+  if (p === '/api/version' && m === 'GET') return json({ version: VERSION });
   await ensureSchema(env, db(env));
 
   if (p === '/api/config' && m === 'GET') return apiConfig(env);
