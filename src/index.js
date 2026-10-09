@@ -116,7 +116,7 @@ function db(env) {
 // ---------- automatic database setup ----------
 // Creates missing tables, upgrades older databases and loads starter questions into an empty pool.
 // Runs once per Worker instance; afterwards it costs a single quick check.
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 const schemaReady = new Map(); // per database
 function sqlStatements(text) {
   return text.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
@@ -151,6 +151,16 @@ async function ensureSchema(env, d) {
         const steps = [[`SELECT pg_advisory_xact_lock(7241001)`]];   // one Worker instance at a time
         // v5: the English starter questions were replaced by the Malayalam question pool
         if (current < 5) steps.push([`DELETE FROM questions WHERE ${version} < 5`]);
+        // v9: reworded starter questions replace their older wording (only where the admin has not edited the text)
+        const renamed = SEED_QUESTIONS.filter((q) => q.previous?.length);
+        if (current < 9 && existing.size && renamed.length) {
+          const olds = [], news = [], expls = [];
+          for (const q of renamed) for (const o of q.previous) { olds.push(o); news.push(q.question); expls.push(q.explanation || null); }
+          steps.push([`UPDATE questions q SET question = v.new_q, explanation = v.expl, updated_at = now()
+            FROM (SELECT unnest($1::text[]) AS old_q, unnest($2::text[]) AS new_q, unnest($3::text[]) AS expl) v
+            WHERE q.question = v.old_q AND ${version} < 9
+              AND NOT EXISTS (SELECT 1 FROM questions x WHERE x.question = v.new_q)`, [olds, news, expls]]);
+        }
         if (missing.length) {
           const params = [];
           const values = missing.map((q) => {

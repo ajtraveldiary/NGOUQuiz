@@ -3,6 +3,10 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.2
+- 27 brochure questions reworded as standalone questions: no "ലഘുലേഖ പ്രകാരം" or "…എന്ന് ലഘുലേഖ പറയുന്നു"; explanations updated too
+- Existing databases get the new wording automatically, once (questions edited in the admin page are left alone)
+
 ## 1.6.1
 - Database upgrade sends only the questions that are missing, instead of the whole pool
 - If adding questions fails, the quiz keeps running on the existing questions; /api/health shows the error (`questionUpgrade`) and the database version

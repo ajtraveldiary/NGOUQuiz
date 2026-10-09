@@ -352,6 +352,21 @@ assert.equal((await race.query(`SELECT category FROM questions WHERE question = 
   assert.equal((await v6.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
   assert.equal((await v6.query('SELECT count(*)::int AS n FROM questions WHERE campaign')).rows[0].n, POOL.filter((q) => q.campaign).length);
 }
+// a v8 database with the older brochure wording gets the reworded questions, once, without duplicates
+{
+  const v8 = new PGlite(); await v8.exec(readFileSync(root + 'db/schema.sql', 'utf8'));
+  for (const q of POOL) {
+    await v8.query(`INSERT INTO questions (question, options, correct_index, difficulty, category, topic, campaign, explanation) VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8)`,
+      [q.previous ? q.previous[0] : q.question, JSON.stringify(q.options), q.correct, q.difficulty, q.category, q.topic, !!q.campaign, 'old']);
+  }
+  await v8.query(`INSERT INTO settings (key, value) VALUES ('schema_version', '8'::jsonb)`);
+  const h = await callEnv({ ...env, __db: mkDb(v8) }, 'GET', '/api/health');
+  assert.equal(h.body.questionUpgrade, 'done');
+  assert.equal((await v8.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
+  assert.equal((await v8.query(`SELECT count(*)::int AS n FROM questions WHERE question LIKE '%ലഘുലേഖ%' OR explanation LIKE '%ലഘുലേഖ%'`)).rows[0].n, 0);
+  const renamedCount = POOL.filter((q) => q.previous).length;
+  assert.equal((await v8.query(`SELECT count(*)::int AS n FROM questions WHERE explanation <> 'old'`)).rows[0].n, renamedCount);
+}
 // if the question upgrade fails, the quiz keeps running and /api/health reports it
 {
   const broken = new PGlite(); await broken.exec(oldSchema);
