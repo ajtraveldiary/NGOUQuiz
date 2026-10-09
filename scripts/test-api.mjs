@@ -39,9 +39,7 @@ const ok = (r, label) => { if (r.status !== 200) { console.error(label, r); proc
 // config
 const cfg = ok(await call('GET', '/api/config'), 'config');
 assert.equal(cfg.totalQuestions, 10);
-assert.equal(cfg.bonusQuestion, true);
-assert.equal(cfg.campaign.date, '2026-11-21');
-assert.equal(cfg.subtitle, 'Kerala NGO Union');
+assert.ok(!['bonusQuestion', 'campaign', 'subtitle', 'tagline', 'values', 'areas'].some((k) => k in cfg), 'no event or organisation details in the config');
 assert.equal(cfg.version, JSON.parse(readFileSync(root + 'package.json', 'utf8')).version);
 assert.equal(ok(await call('GET', '/api/version'), 'version').version, cfg.version);
 assert.equal((await worker.fetch(new Request('https://quiz.test/api/version'), { ...env, __db: undefined, DATABASE_URL: '' }, {})).status, 200, 'version check needs no database');
@@ -51,30 +49,15 @@ assert.equal((await worker.fetch(new Request('https://quiz.test/api/version'), {
     assert.equal(html.match(re)?.[1], cfg.version, 'run node scripts/stamp-version.mjs: ' + re);
   }
 }
-assert.equal(cfg.districts.length, 15);
-assert.ok(cfg.districts.includes('Thiruvananthapuram North') && cfg.districts.includes('Thiruvananthapuram South'));
-assert.ok(!cfg.districts.includes('Thiruvananthapuram'));
+assert.equal(cfg.districts.length, 14);
+assert.ok(cfg.districts.includes('Thiruvananthapuram') && !cfg.districts.some((d) => /North|South/.test(d)));
 
-// areas: admin adds areas for Kollam; registration in Kollam then requires one
-const { token: tok0 } = ok(await call('POST', '/api/admin/login', { password: 'pass123' }), 'early login');
-const A0 = { authorization: 'Bearer ' + tok0 };
-assert.deepEqual(ok(await call('POST', '/api/admin/areas', { district: 'Kollam', names: ['Kottarakkara', 'Kollam Town', 'Kottarakkara', ' '] }, A0), 'add areas'), { added: 2, skipped: 0 });
-assert.deepEqual(ok(await call('POST', '/api/admin/areas', { district: 'Kollam', names: ['Kollam Town', 'Punalur'] }, A0), 'add more'), { added: 1, skipped: 1 });
-assert.equal((await call('POST', '/api/admin/areas', { district: 'Nowhere', names: ['x'] }, A0)).status, 400);
-const cfgA = ok(await call('GET', '/api/config'), 'config areas');
-assert.deepEqual(cfgA.areas.Kollam, ['Kollam Town', 'Kottarakkara', 'Punalur']);
-assert.deepEqual(cfgA.areas.Kottayam, []);
-assert.equal((await call('POST', '/api/register', { name: 'Biju', office: 'X', district: 'Kollam', phone: '9123456780' })).status, 400);
-assert.equal((await call('POST', '/api/register', { name: 'Biju', office: 'X', district: 'Kollam', area: 'Mars', phone: '9123456780' })).status, 400);
-console.log('✓ 15 districts, areas required where configured');
+// validation: a name (or nickname) and a district
+assert.equal((await call('POST', '/api/register', { name: 'A', district: 'Kollam' })).status, 400);
+assert.equal((await call('POST', '/api/register', { name: 'Anu', district: 'Nowhere' })).status, 400);
 
-// validation
-assert.equal((await call('POST', '/api/register', { name: 'A', office: 'X', district: 'Kollam', phone: '123' })).status, 400);
-assert.equal((await call('POST', '/api/register', { name: 'Anu', office: 'DHS', district: 'Nowhere', phone: '9876543210' })).status, 400);
-
-async function playGame(player, strategy) {
-  const reg = ok(await call('POST', '/api/register', player), 'register');
-  const key = reg.playerKey;
+async function playGame(player, strategy, existingKey) {
+  const key = existingKey || ok(await call('POST', '/api/register', player), 'register').playerKey;
   const st = ok(await call('POST', '/api/game/start', { playerKey: key }), 'start');
   const levels = [];
   let last;
@@ -105,16 +88,11 @@ async function cheatCorrect(i, q, key, gameId) {
   const qq = (await pg.query('SELECT correct_index FROM questions WHERE id = $1', [g.question_ids[i]])).rows[0];
   return g.option_orders[i].indexOf(qq.correct_index);
 }
-const p1 = await playGame({ name: 'Anu Mohan', office: 'DHS Thiruvananthapuram', district: 'Thiruvananthapuram North', phone: '+91 98765 43210' }, cheatCorrect);
-assert.deepEqual(p1.levels.slice(0, 10), ['easy', 'easy', 'easy', 'easy', 'medium', 'medium', 'medium', 'medium', 'hard', 'hard']);
-assert.equal(p1.levels.length, 11, '10 regular questions + 1 bonus');
-const p1Game = (await pg.query('SELECT question_ids FROM games WHERE id = $1', [p1.st.gameId])).rows[0];
-const p1Flags = (await pg.query('SELECT id, campaign FROM questions WHERE id = ANY($1::int[])', [p1Game.question_ids])).rows;
-const isCampaign = Object.fromEntries(p1Flags.map((r) => [r.id, r.campaign]));
-assert.deepEqual(p1Game.question_ids.map((id) => isCampaign[id]), [...Array(10).fill(false), true], 'only the last question is about the programme');
-assert.equal(p1.res.answers[10].bonus, true);
-assert.equal(p1.res.correct, 11);
-assert.equal(p1.res.bestStreak, 11);
+const p1 = await playGame({ name: 'Anu Mohan', district: 'Thiruvananthapuram' }, cheatCorrect);
+assert.deepEqual(p1.levels, ['easy', 'easy', 'easy', 'easy', 'medium', 'medium', 'medium', 'medium', 'hard', 'hard'], '10 questions, no bonus');
+assert.ok(p1.res.answers.every((a) => !('bonus' in a)));
+assert.equal(p1.res.correct, 10);
+assert.equal(p1.res.bestStreak, 10);
 assert.equal(p1.res.overall.me.rank, 1);
 assert.ok(p1.res.personalBest);
 // max score: base*2 per question (instant) + streak bonus 25,50,75,100,100…
@@ -124,7 +102,7 @@ assert.equal(p1.res.score, expected, `score ${p1.res.score} vs ${expected}`);
 console.log('✓ perfect game score', p1.res.score);
 
 // Player 2: wrong on everything, plus a timeout on Q1
-const p2 = await playGame({ name: 'Biju K', office: 'Taluk Hospital', district: 'Kollam', area: 'Kottarakkara', phone: '9123456789' }, async (i, q, key, gameId) => {
+const p2 = await playGame({ name: 'Biju K', district: 'Kollam' }, async (i, q, key, gameId) => {
   if (i === 0) { await pg.query(`UPDATE games SET served_at = now() - interval '30 seconds' WHERE id = $1`, [gameId]); return 1; }
   const right = await cheatCorrect(i, q, key, gameId);
   return (right + 1) % q.options.length;
@@ -135,19 +113,19 @@ assert.equal(p2.res.districtBoard.me.rank, 1);
 console.log('✓ zero game, timeout + wrong answers handled');
 
 // Player 3: half right, slow-ish answers (10s each)
-const p3 = await playGame({ name: 'Cicily', office: 'PHC Kottayam', district: 'Kottayam', phone: '9000000001' }, async (i, q, key, gameId) => {
+const p3 = await playGame({ name: 'Cicily', district: 'Kottayam' }, async (i, q, key, gameId) => {
   await pg.query(`UPDATE games SET served_at = now() - interval '10.4 seconds' WHERE id = $1`, [gameId]);
   const right = await cheatCorrect(i, q, key, gameId);
   return i % 2 === 0 ? right : (right + 1) % q.options.length;
 });
-assert.equal(p3.res.correct, 6); // 11 questions, every other one right
+assert.equal(p3.res.correct, 5); // 10 questions, every other one right
 assert.equal(p3.res.overall.me.rank, 2);
 assert.equal(p3.res.overall.total, 3);
 console.log('✓ half-right game score', p3.res.score, 'rank', p3.res.overall.me.rank);
 
 // Player 4: right, wrong, skip, wrong... checks negative marks and skips exactly
 {
-  const reg = ok(await call('POST', '/api/register', { name: 'Deepa', office: 'DHS', district: 'Kottayam', phone: '9000000002' }), 'reg4');
+  const reg = ok(await call('POST', '/api/register', { name: 'Deepa', district: 'Kottayam' }), 'reg4');
   const st = ok(await call('POST', '/api/game/start', { playerKey: reg.playerKey }), 'start4');
   const peek = async (i) => {
     const g = (await pg.query('SELECT question_ids, option_orders FROM games WHERE id = $1', [st.gameId])).rows[0];
@@ -171,34 +149,19 @@ console.log('✓ half-right game score', p3.res.score, 'rank', p3.res.overall.me
   assert.equal(a2.skipped, true); assert.equal(a2.points, 0); assert.equal(a2.score, a1.score); assert.equal(a2.timedOut, false);
   let last;
   for (let i = 3; i < st.total; i++) last = await ans(i, ((await peek(i)) + 1) % 4); // all wrong: score floors at 0
-  assert.equal(last.bonus, true); assert.equal(last.wrong, true); assert.equal(last.points, 0); assert.equal(last.fullPenalty, 0);
+  assert.equal(last.wrong, true); assert.equal(last.points, 0); assert.equal(last.fullPenalty, 50); // hard, score already at zero
   const res = ok(await call('POST', '/api/game/result', { playerKey: reg.playerKey, gameId: st.gameId }), 'res4');
   assert.equal(res.score, 0);
-  assert.equal(res.wrong, 9); assert.equal(res.skipped, 1); assert.equal(res.correct, 1);
+  assert.equal(res.wrong, 8); assert.equal(res.skipped, 1); assert.equal(res.correct, 1);
   assert.equal(res.marksLost, a0.points);
   assert.deepEqual(res.answers.slice(0, 3).map((a) => a.state), ['right', 'wrong', 'skipped']);
   assert.equal((await pg.query('SELECT count(*)::int AS n FROM answers WHERE game_id = $1 AND skipped', [st.gameId])).rows[0].n, 1);
   assert.equal((await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st.gameId, index: 10, choice: 'nope' })).status, 409);
-  console.log('✓ negative marks, skip without penalty, score never below zero, wrong bonus costs nothing');
-  // a correct bonus answer earns points: check with a fresh game answered right only on the bonus
-  const st2 = ok(await call('POST', '/api/game/start', { playerKey: reg.playerKey }), 'start4b');
-  const peek2 = async (i) => {
-    const g = (await pg.query('SELECT question_ids, option_orders FROM games WHERE id = $1', [st2.gameId])).rows[0];
-    const qq = (await pg.query('SELECT correct_index FROM questions WHERE id = $1', [g.question_ids[i]])).rows[0];
-    return g.option_orders[i].indexOf(qq.correct_index);
-  };
-  let b;
-  for (let i = 0; i < st2.total; i++) {
-    const nx = ok(await call('POST', '/api/game/next', { playerKey: reg.playerKey, gameId: st2.gameId }), 'next4b');
-    assert.equal(!!nx.bonus, i === st2.total - 1);
-    await pg.query(`UPDATE games SET served_at = now() - interval '6 seconds' WHERE id = $1`, [st2.gameId]);
-    b = ok(await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st2.gameId, index: i, choice: i === st2.total - 1 ? await peek2(i) : 'skip' }), 'ans4b');
-  }
-  assert.equal(b.bonus, true); assert.equal(b.correct, true); assert.ok(b.points > 0); assert.equal(b.done, true);
+  console.log('✓ negative marks, skip without penalty, score never below zero');
 }
 
-// Same phone registers again → same player, replay; best score counts once on board
-const again = await playGame({ name: 'Biju K', office: 'Taluk Hospital', district: 'Kollam', area: 'Kottarakkara', phone: '09123456789' }, cheatCorrect);
+// The same player (same key on their phone) plays again; best score counts once on the board
+const again = await playGame(null, cheatCorrect, p2.key);
 assert.equal(again.res.overall.total, 4);
 assert.ok(again.res.personalBest);
 console.log('✓ replay keeps one board entry; Biju now rank', again.res.overall.me.rank);
@@ -211,8 +174,7 @@ assert.equal((await call('POST', '/api/game/next', { playerKey: p3.key, gameId: 
 // Public leaderboard
 const lb = ok(await call('GET', '/api/leaderboard?district=Kollam&key=' + encodeURIComponent(p2.key)), 'board');
 assert.equal(lb.top[0].isMe, true);
-assert.equal(lb.top[0].area, 'Kottarakkara');
-assert.ok(!('phone' in lb.top[0]), 'phone must not be public');
+assert.ok(lb.top.every((x) => !('phone' in x) && !('office' in x) && !('area' in x)), 'no phone, office or area in public data');
 
 // Admin
 assert.equal((await call('GET', '/api/admin/stats')).status, 401);
@@ -224,7 +186,7 @@ assert.equal(page.status, 200);
 assert.equal(page.headers.get('x-robots-tag'), 'noindex, nofollow');
 const stats = ok(await call('GET', '/api/admin/stats', undefined, A), 'stats');
 assert.equal(stats.totals.players, 4);
-assert.equal(stats.totals.finished, 6);
+assert.equal(stats.totals.finished, 5);
 const qs = ok(await call('GET', '/api/admin/questions', undefined, A), 'questions');
 assert.equal(qs.questions.length, POOL.length);
 assert.ok(qs.questions.every((q) => /[\u0D00-\u0D7F]/.test(q.question)), 'pool is Malayalam');
@@ -268,7 +230,7 @@ const players = ok(await call('GET', '/api/admin/players?q=biju', undefined, A),
 assert.equal(players.total, 1);
 const detail = ok(await call('GET', '/api/admin/players/' + players.players[0].id, undefined, A), 'player');
 assert.equal(detail.games.length, 2);
-assert.equal(detail.answers.length, 22); // 2 games × 11 questions
+assert.equal(detail.answers.length, 20); // 2 games × 10 questions
 const lb1 = ok(await call('GET', '/api/leaderboard'), 'board');
 assert.ok(lb1.plays >= stats.totals.finished, 'plays include every game');
 assert.ok(!('plays' in lb), 'district board has no play count');
@@ -276,11 +238,20 @@ ok(await call('POST', `/api/admin/games/${again.st.gameId}/void`, {}, A), 'void'
 const lb2 = ok(await call('GET', '/api/leaderboard'), 'board after void');
 assert.equal(lb2.top.find((x) => x.name === 'Biju K').score, 0);
 assert.equal(lb2.plays, lb1.plays - 1, 'voided game is not a play');
-ok(await call('POST', '/api/register', { name: 'Card Only', office: 'DHS', district: 'Kottayam', phone: '9000000099' }), 'register only');
+ok(await call('POST', '/api/register', { name: 'Card Only', district: 'Kottayam' }), 'register only');
 assert.equal(ok(await call('GET', '/api/leaderboard'), 'board').plays, lb1.plays, 'filling the player card counts as a play');
 ok(await call('POST', `/api/admin/games/${again.st.gameId}/restore`, {}, A), 'restore');
 const csv = await call('GET', '/api/admin/export?type=leaderboard', undefined, A);
-assert.ok(csv.body.includes('Anu Mohan') && csv.body.includes('9876543210'));
+assert.ok(csv.body.includes('Anu Mohan'));
+// an old copy of the game may still send phone and office: they are ignored, and every card is a new player
+{
+  const r1 = ok(await call('POST', '/api/register', { name: 'Old Client', office: 'DHS', district: 'Kollam', area: 'X', phone: '9876500000' }), 'old fields');
+  assert.deepEqual((await pg.query('SELECT office, phone, area FROM players WHERE name = $1', ['Old Client'])).rows[0], { office: null, phone: null, area: null });
+  const r2 = ok(await call('POST', '/api/register', { name: 'Old Client', district: 'Kollam', phone: '9876500000' }), 'same again');
+  assert.notEqual(r2.playerKey, r1.playerKey);
+  assert.deepEqual(Object.keys(r2.player).sort(), ['district', 'name']);
+  console.log('✓ player card: name and district only; phone, office and area are never stored');
+}
 const qcsv = await call('GET', '/api/admin/export?type=questions', undefined, A);
 assert.ok(qcsv.body.split('\r\n').length > 30);
 const set = ok(await call('PUT', '/api/admin/settings', { easy: 2, medium: 2, hard: 1, timeLimitSec: 15, maxAttempts: 1, open: true }, A), 'settings');
@@ -293,6 +264,10 @@ assert.equal((await call('POST', '/api/game/start', { playerKey: p2.key })).stat
 ok(await call('PUT', '/api/admin/settings', { open: false, maxAttempts: 0 }, A), 'close');
 assert.equal((await call('POST', '/api/game/start', { playerKey: p3.key })).status, 403);
 
+// admin areas: kept for earlier players (the player card no longer asks)
+assert.deepEqual(ok(await call('POST', '/api/admin/areas', { district: 'Kollam', names: ['Kottarakkara', 'Kollam Town', 'Kottarakkara', ' '] }, A), 'add areas'), { added: 2, skipped: 0 });
+assert.equal((await call('POST', '/api/admin/areas', { district: 'Nowhere', names: ['x'] }, A)).status, 400);
+await pg.query(`UPDATE players SET area = 'Kottarakkara' WHERE name = 'Biju K'`);
 const ar = ok(await call('GET', '/api/admin/areas', undefined, A), 'areas list');
 const kt = ar.areas.find((a) => a.name === 'Kottarakkara');
 assert.equal(kt.players, 1);
@@ -302,25 +277,22 @@ assert.equal(ok(await call('GET', '/api/admin/players?district=Kollam&area=Kotta
 assert.ok(ok(await call('GET', '/api/admin/stats', undefined, A), 'stats2').byArea.some((x) => x.area === 'Kottarakara'));
 assert.ok((await call('GET', '/api/admin/export?type=players', undefined, A)).body.includes('Kottarakara'));
 ok(await call('DELETE', '/api/admin/areas/' + kt.id, undefined, A), 'delete area');
-assert.ok(!ok(await call('GET', '/api/config'), 'cfg3').areas.Kollam.includes('Kottarakara'));
+assert.ok(!('areas' in ok(await call('GET', '/api/config'), 'cfg3')));
 console.log('✓ areas: rename updates players, filter, stats, export, delete');
 // ---- question picking: never two questions with the same topic in one game ----
 {
   const { pickQuestions } = await import(root + '.test-build/worker.mjs?pick');
-  const pool = POOL.map((q, i) => ({ id: i + 1, difficulty: q.difficulty, category: q.category, topic: q.topic, campaign: !!q.campaign }));
+  const pool = POOL.map((q, i) => ({ id: i + 1, difficulty: q.difficulty, category: q.category, topic: q.topic }));
   const MIX = [{ name: 'Political', percent: 60 }, { name: 'Constitution', percent: 10 }, { name: 'KSR & Govt rules', percent: 20 }, { name: 'General political', percent: 10 }];
   for (let g = 0; g < 300; g++) {
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    const ids = pickQuestions(shuffled, { easy: 4, medium: 4, hard: 2, bonusQuestion: true, categoryMix: MIX });
-    assert.equal(ids.length, 11);
+    const ids = pickQuestions(shuffled, { easy: 4, medium: 4, hard: 2, categoryMix: MIX });
+    assert.equal(ids.length, 10);
     const qs = ids.map((id) => pool[id - 1]);
-    assert.equal(new Set(qs.map((q) => q.topic)).size, 11, 'topics repeat in a game');
-    assert.deepEqual(qs.slice(0, 10).map((q) => q.difficulty), ['easy', 'easy', 'easy', 'easy', 'medium', 'medium', 'medium', 'medium', 'hard', 'hard']);
-    assert.deepEqual(qs.map((q) => q.campaign), [...Array(10).fill(false), true], 'exactly one programme question, as the bonus');
-    const byCat = qs.slice(0, 10).reduce((m, q) => ((m[q.category] = (m[q.category] || 0) + 1), m), {});
+    assert.equal(new Set(qs.map((q) => q.topic)).size, 10, 'topics repeat in a game');
+    assert.deepEqual(qs.map((q) => q.difficulty), ['easy', 'easy', 'easy', 'easy', 'medium', 'medium', 'medium', 'medium', 'hard', 'hard']);
+    const byCat = qs.reduce((m, q) => ((m[q.category] = (m[q.category] || 0) + 1), m), {});
     assert.deepEqual(byCat, { Political: 6, Constitution: 1, 'KSR & Govt rules': 2, 'General political': 1 }, JSON.stringify(byCat));
-    const off = pickQuestions(shuffled, { easy: 4, medium: 4, hard: 2, bonusQuestion: false }).map((id) => pool[id - 1]);
-    assert.equal(off.length, 10); assert.ok(off.every((q) => !q.campaign), 'no programme questions when the bonus is off');
   }
   // a tiny pool still produces a full game (topics may repeat only when unavoidable)
   const tiny = [{ id: 1, difficulty: 'easy', topic: 'a' }, { id: 2, difficulty: 'easy', topic: 'a' }, { id: 3, difficulty: 'hard', topic: 'b' }];
@@ -330,7 +302,7 @@ console.log('✓ areas: rename updates players, filter, stats, export, delete');
   assert.deepEqual(categoryQuotas(MIX, 10).map((x) => x.n), [6, 1, 2, 1]);
   assert.equal(categoryQuotas([{ name: 'A', percent: 50 }, { name: 'B', percent: 50 }], 5).reduce((t, x) => t + x.n, 0), 5);
   assert.equal(categoryQuotas([{ name: 'A', percent: 30 }], 10)[0].n, 3);
-  console.log('✓ 300 random games: 6 Political, 1 Constitution, 2 KSR, 1 General political; 4 easy, 4 medium, 2 hard; + 1 programme bonus; no repeated topic');
+  console.log('✓ 300 random games: 6 Political, 1 Constitution, 2 KSR, 1 General political; 4 easy, 4 medium, 2 hard; no repeated topic');
 }
 
 // ---- automatic database setup ----
@@ -355,13 +327,15 @@ const oldSchema = execSync('git show f765cbf:db/schema.sql', { cwd: root }).toSt
 const old = new PGlite();
 await old.exec(oldSchema);
 await old.query(`INSERT INTO players (name, office, district, phone) VALUES ('Old', 'X', 'Thiruvananthapuram', '9999999999')`);
-await old.query(`INSERT INTO settings (key, value) VALUES ('game', '{"subtitle": "Kerala NGO Union, State Committee", "title": "Arivu Quiz"}')`);
+await old.query(`INSERT INTO settings (key, value) VALUES ('game', '{"subtitle": "An organisation", "values": ["x"], "title": "Arivu Quiz"}')`);
 await old.query(`INSERT INTO questions (question, options, correct_index, difficulty) VALUES ('Old English question?', '["a","b"]', 0, 'easy')`);
 const envOld = { ...env, __db: mkDb(old) };
 const c2 = await callEnv(envOld, 'GET', '/api/config');
 assert.equal(c2.status, 200, JSON.stringify(c2.body));
-assert.equal((await old.query('SELECT district FROM players')).rows[0].district, 'Thiruvananthapuram North');
-assert.equal(c2.body.subtitle, 'Kerala NGO Union');
+assert.equal((await old.query('SELECT district FROM players')).rows[0].district, 'Thiruvananthapuram');
+assert.ok(!('subtitle' in c2.body));
+assert.deepEqual(Object.keys((await old.query(`SELECT value FROM settings WHERE key = 'game'`)).rows[0].value), ['title'], 'retired settings removed');
+await old.query(`INSERT INTO players (name, district) VALUES ('No phone', 'Kollam')`); // phone and office are optional now
 // existing questions are cleared once and replaced by the Malayalam pool
 assert.equal((await old.query(`SELECT count(*)::int AS n FROM questions WHERE question = 'Old English question?'`)).rows[0].n, 0);
 assert.equal((await old.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
@@ -382,7 +356,7 @@ await callEnv({ ...env, __db: mkDb(race) }, 'GET', '/api/health');
 // only the original pension questions move to Political; Constitution / KSR / General political keep their own category
 assert.equal((await race.query(`SELECT count(*)::int AS n FROM questions WHERE category = 'Political'`)).rows[0].n, POOL.filter((q) => !q.batch).length);
 assert.equal((await race.query(`SELECT category FROM questions WHERE question = 'അഡ്മിൻ ചോദ്യം?'`)).rows[0].category, 'GK');
-// a v6 database (first 61 questions only) gets the Secretariat Valayal questions once, no duplicates
+// a v6 database (first questions only) gets the later batches once, no duplicates
 {
   const v6 = new PGlite(); await v6.exec(readFileSync(root + 'db/schema.sql', 'utf8'));
   const first = POOL.filter((q) => !q.batch);
@@ -394,22 +368,28 @@ assert.equal((await race.query(`SELECT category FROM questions WHERE question = 
   await callEnv({ ...env, __db: mkDb(v6) }, 'GET', '/api/health');
   await callEnv({ ...env, __db: mkDb(v6) }, 'GET', '/api/health');
   assert.equal((await v6.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
-  assert.equal((await v6.query('SELECT count(*)::int AS n FROM questions WHERE campaign')).rows[0].n, POOL.filter((q) => q.campaign).length);
 }
-// a v8 database with the older brochure wording gets the reworded questions, once, without duplicates
+// a v9 database (the earlier pool: bonus questions and questions naming an organisation; old districts) is upgraded once
 {
-  const v8 = new PGlite(); await v8.exec(readFileSync(root + 'db/schema.sql', 'utf8'));
-  for (const q of POOL) {
-    await v8.query(`INSERT INTO questions (question, options, correct_index, difficulty, category, topic, campaign, explanation) VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8)`,
-      [q.previous ? q.previous[0] : q.question, JSON.stringify(q.options), q.correct, q.difficulty, q.category, q.topic, !!q.campaign, 'old']);
+  const OLD_POOL = JSON.parse(execSync('git show 91610f6:db/seed-questions.json', { cwd: root, maxBuffer: 1 << 26 }).toString());
+  const v9 = new PGlite(); await v9.exec(readFileSync(root + 'db/schema.sql', 'utf8'));
+  for (const q of OLD_POOL) {
+    await v9.query(`INSERT INTO questions (question, options, correct_index, difficulty, category, topic, campaign) VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7)`,
+      [q.question, JSON.stringify(q.options), q.correct, q.difficulty, q.category, q.topic, !!q.campaign]);
   }
-  await v8.query(`INSERT INTO settings (key, value) VALUES ('schema_version', '8'::jsonb)`);
-  const h = await callEnv({ ...env, __db: mkDb(v8) }, 'GET', '/api/health');
+  await v9.query(`INSERT INTO players (name, office, district, phone) VALUES ('North', 'X', 'Thiruvananthapuram North', '9000000011'), ('South', 'Y', 'Thiruvananthapuram South', '9000000012')`);
+  await v9.query(`INSERT INTO areas (district, name) VALUES ('Thiruvananthapuram North', 'Same'), ('Thiruvananthapuram South', 'Same'), ('Thiruvananthapuram South', 'Other')`);
+  await v9.query(`INSERT INTO settings (key, value) VALUES ('schema_version', '9'::jsonb), ('game', '{"subtitle": "Org", "campaign": {"show": true}, "bonusQuestion": true, "easy": 4}'::jsonb)`);
+  const h = await callEnv({ ...env, __db: mkDb(v9) }, 'GET', '/api/health');
+  await callEnv({ ...env, __db: mkDb(v9) }, 'GET', '/api/health'); // runs once
   assert.equal(h.body.questionUpgrade, 'done');
-  assert.equal((await v8.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
-  assert.equal((await v8.query(`SELECT count(*)::int AS n FROM questions WHERE question LIKE '%ലഘുലേഖ%' OR explanation LIKE '%ലഘുലേഖ%'`)).rows[0].n, 0);
-  const renamedCount = POOL.filter((q) => q.previous).length;
-  assert.equal((await v8.query(`SELECT count(*)::int AS n FROM questions WHERE explanation <> 'old'`)).rows[0].n, renamedCount);
+  assert.equal(h.body.activeQuestions, POOL.length, 'only the current pool stays active');
+  assert.equal((await v9.query('SELECT count(*)::int AS n FROM questions WHERE NOT active')).rows[0].n, OLD_POOL.length - POOL.length, 'retired questions are hidden, not deleted');
+  assert.equal((await v9.query('SELECT count(*)::int AS n FROM questions WHERE campaign')).rows[0].n, 0);
+  assert.deepEqual((await v9.query('SELECT DISTINCT district FROM players')).rows, [{ district: 'Thiruvananthapuram' }]);
+  assert.deepEqual((await v9.query(`SELECT name FROM areas WHERE district = 'Thiruvananthapuram' ORDER BY name`)).rows.map((r) => r.name), ['Other', 'Same']);
+  assert.deepEqual((await v9.query(`SELECT value FROM settings WHERE key = 'game'`)).rows[0].value, { easy: 4 });
+  console.log('✓ upgrade from the earlier pool: 27 questions hidden, districts merged, retired settings removed');
 }
 // if the question upgrade fails, the quiz keeps running and /api/health reports it
 {

@@ -154,39 +154,15 @@
 
   // ---------- state ----------
   const S = {
-    cfg: null, me: store.get('player'), // { playerKey, player:{name,office,district,phone} }
+    cfg: null, me: store.get('player'), // { playerKey, player:{name,district} }
     gameId: null, total: 10, q: null, answered: false, score: 0, streak: 0, lastLevel: null,
     timer: { t: 0, end: 0, lastSec: null }, nextT: 0, skipT: 0, skipArmT: 0, skipArmed: 0, result: null,
   };
-
-  // ---------- campaign (Secretariat Valayal) ----------
-  // The event details are fixed in index.html; only the countdown is worked out here
-  const CAMPAIGN = { name: 'Secretariat Valayal', date: '2026-11-21' };
-  const IST = 5.5 * 3600e3;
-  function campaignWhen() {
-    const target = Date.parse(CAMPAIGN.date + 'T00:00:00+05:30');
-    const today = Date.parse(new Date(Date.now() + IST).toISOString().slice(0, 10) + 'T00:00:00+05:30');
-    const days = Math.round((target - today) / 864e5);
-    const short = new Date(target).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' });
-    return { days, short };
-  }
-  function renderCampaign() {
-    if (!$('#campaignTicket') || !$('#campCard')) return; // page without the campaign parts
-    const w = campaignWhen();
-    const big = w.days > 1 ? String(w.days) : w.days === 1 ? '1' : w.days === 0 ? 'Today' : '✓';
-    const unit = w.days > 1 ? 'days to go' : w.days === 1 ? 'day to go' : w.days === 0 ? 'Join us' : 'Held';
-    // the number of days counts up from 0, like the stats below it
-    if (w.days > 1) countUp($('#tkBig'), 0, w.days, 900); else $('#tkBig').textContent = big;
-    $('#tkUnit').textContent = unit;
-    $('#tkBig').style.fontSize = big.length > 3 ? '30px' : '';
-    $('#campKicker').textContent = w.days > 0 ? `See you on ${w.short}. ${w.days} day${w.days === 1 ? '' : 's'} to go.` : w.days === 0 ? 'It is today. Join us.' : `Held on ${w.short}.`;
-  }
 
   // ---------- splash ----------
   async function boot() {
     $('#soundBtn').setAttribute('aria-pressed', String(Sound.on));
     $('#soundBtn').setAttribute('aria-label', Sound.on ? 'Sound on' : 'Sound off');
-    try { renderCampaign(); } catch (e) { console.error('campaign', e); }
     // The player's button shows straight away; the stats request runs alongside the settings request
     renderSplashPlayer();
     const board = API.board('', S.me?.playerKey).then(renderStats).catch(() => {});
@@ -195,7 +171,7 @@
     // server, load the fresh page once (the guard stops a reload loop while a deploy is still rolling out).
     if (updateTo(S.cfg?.version)) return;
     lastCheck = Date.now();
-    const c = S.cfg || { title: 'Arivu Quiz', districts: [], areas: {}, totalQuestions: 10, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
+    const c = S.cfg || { title: 'Arivu Quiz', districts: [], totalQuestions: 10, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
     S.total = c.totalQuestions;
     const opts = (c.districts || []).map((d) => `<option>${esc(d)}</option>`).join('');
     $('#regForm [name=district]').insertAdjacentHTML('beforeend', opts);
@@ -242,20 +218,13 @@
   }
 
   // ---------- registration ----------
+  // A card always starts empty: saving it makes a new player (only a name and district are asked)
   function openRegister() {
-    const f = $('#regForm'), p = S.me?.player || {};
-    f.name.value = p.name || ''; f.office.value = p.office || ''; f.district.value = p.district || ''; f.phone.value = p.phone || '';
-    fillAreas(f.district.value, p.area || '');
+    const f = $('#regForm');
+    f.name.value = ''; f.district.value = '';
     updateAvatar(); $('#regError').textContent = '';
     show('register');
-    setTimeout(() => (p.name ? null : f.name.focus()), 350);
-  }
-  function fillAreas(district, selected) {
-    const list = (S.cfg?.areas || {})[district] || [];
-    const sel = $('#regForm').area;
-    sel.innerHTML = '<option value="">Choose your area</option>' + list.map((a) => `<option>${esc(a)}</option>`).join('');
-    sel.value = list.includes(selected) ? selected : '';
-    $('#areaField').hidden = !list.length;
+    setTimeout(() => f.name.focus(), 350);
   }
   function updateAvatar() {
     const v = $('#regForm').name.value.trim(), a = $('#avatar'), ch = v ? v[0].toUpperCase() : '?';
@@ -265,13 +234,10 @@
     e.preventDefault();
     const f = e.target, err = $('#regError');
     f.querySelectorAll('.invalid').forEach((x) => x.classList.remove('invalid'));
-    const data = { name: f.name.value.trim(), office: f.office.value.trim(), district: f.district.value, area: f.area.value, phone: f.phone.value.replace(/\D/g, '') };
+    const data = { name: f.name.value.trim(), district: f.district.value };
     const bad = (el, msg) => { el.classList.add('invalid'); el.focus(); err.textContent = msg; buzz(60); };
-    if (data.name.length < 2) return bad(f.name, 'Enter your name.');
-    if (data.office.length < 2) return bad(f.office, 'Enter your office.');
+    if (data.name.length < 2) return bad(f.name, 'Enter your name or a nickname.');
     if (!data.district) return bad(f.district, 'Choose your district.');
-    if (!$('#areaField').hidden && !data.area) return bad(f.area, 'Choose your area.');
-    if (!/^[6-9]\d{9}$/.test(data.phone)) return bad(f.phone, 'Enter a valid 10-digit mobile number.');
     err.textContent = '';
     const btn = $('#regSubmit'); btn.disabled = true; btn.textContent = 'Saving…';
     try {
@@ -318,8 +284,7 @@
       await countdown();
       const g = await starting;
       S.gameId = g.gameId; S.total = g.total; S.score = 0; S.streak = 0; S.lastLevel = null;
-      const bonusSlot = S.cfg?.bonusQuestion && g.total > (S.cfg?.totalQuestions || 10);
-      $('#march').innerHTML = Array.from({ length: g.total }, (_, i) => `<li${bonusSlot && i === g.total - 1 ? ' class="bonus-slot" title="Bonus question"' : ''}></li>`).join('');
+      $('#march').innerHTML = '<li></li>'.repeat(g.total);
       await loadNext();
     } catch (e) {
       if (e.status !== 401 && from) show(from);
@@ -348,15 +313,6 @@
     ov.hidden = true;
   }
 
-  async function bonusIntro() {
-    const ov = $('#levelUp'), l = $('#luLevel');
-    l.textContent = 'Bonus'; l.className = 'lu-level bonus';
-    $('#luLine').textContent = `One more on the ${CAMPAIGN.name}. No marks lost if wrong.`;
-    ov.hidden = false; Sound.fanfare();
-    await wait(1700);
-    ov.hidden = true;
-  }
-
   async function loadNext() {
     clearTimeout(S.nextT);
     if (S.loading) return; // a double tap on Next must not ask for the question twice
@@ -367,17 +323,16 @@
     catch (e) { toast(e.message); $('#feedback').hidden = false; nb.querySelector('.lbl').textContent = 'Try again'; return; }
     finally { clearTimeout(slow); nb.classList.remove('busy'); S.loading = false; }
     if (q.done) return finish();
-    if (q.bonus) await bonusIntro();
-    else if (S.lastLevel && q.difficulty !== S.lastLevel) await levelUp(q.difficulty);
-    if (!q.bonus) S.lastLevel = q.difficulty;
+    if (S.lastLevel && q.difficulty !== S.lastLevel) await levelUp(q.difficulty);
+    S.lastLevel = q.difficulty;
     S.q = q; S.answered = false;
     S.score = q.score; $('#hudScore').textContent = fmt(q.score); setStreak(q.streak);
     const march = $('#march').children;
     for (let i = 0; i < march.length; i++) march[i].classList.toggle('now', i === q.index);
     const lv = $('#qLevel');
-    lv.textContent = q.bonus ? `Bonus · ${q.points} pts` : `${LEVEL_NAME[q.difficulty]} · ${q.points} pts`;
-    lv.className = 'level ' + (q.bonus ? 'bonus' : q.difficulty);
-    $('#qNum').textContent = q.bonus ? 'Bonus question' : `Question ${q.index + 1} of ${q.total - (S.cfg?.bonusQuestion && q.total > (S.cfg?.totalQuestions || 10) ? 1 : 0)}`;
+    lv.textContent = `${LEVEL_NAME[q.difficulty]} · ${q.points} pts`;
+    lv.className = 'level ' + q.difficulty;
+    $('#qNum').textContent = `Question ${q.index + 1} of ${q.total}`;
     const qt = $('#qText'); qt.textContent = q.question; qt.classList.remove('in', 'long', 'xlong'); void qt.offsetWidth;
     qt.classList.add('in'); if (q.question.length > 150) qt.classList.add('xlong'); else if (q.question.length > 95) qt.classList.add('long');
     $('#options').classList.toggle('long', q.options.some((o) => o.length > 60));
@@ -482,7 +437,7 @@
       Sound.bad(); buzz([70, 40, 70]);
       pts.className = 'fb-points minus';
       pts.textContent = r.penalty ? '−' + fmt(r.penalty) : 'Not quite';
-      const lost = r.bonus ? 'No marks lost on the bonus question.' : r.penalty ? `Wrong answer, ${r.penalty} marks lost.` : r.fullPenalty ? 'Wrong answer. Your score is already at zero.' : 'Wrong answer.';
+      const lost = r.penalty ? `Wrong answer, ${r.penalty} marks lost.` : r.fullPenalty ? 'Wrong answer. Your score is already at zero.' : 'Wrong answer.';
       line.textContent = lost + (S.streak >= 2 ? ` Streak of ${S.streak} ends here.` : ' The right answer is in green.');
     } else {
       right.classList.add('right');
@@ -521,10 +476,10 @@
   // ---------- results ----------
   function badgeFor(correct, total) {
     const r = total ? correct / total : 0;
-    if (r >= 0.9) return 'Union Star';
-    if (r >= 0.7) return 'Front-line Voice';
-    if (r >= 0.5) return 'Steady Marcher';
-    return 'Keep marching';
+    if (r >= 0.9) return 'Expert';
+    if (r >= 0.7) return 'Well informed';
+    if (r >= 0.5) return 'Good effort';
+    return 'Keep learning';
   }
   async function finish() {
     stopTimer();
@@ -542,7 +497,6 @@
     const dot = { right: ['ok', '✓', 'right'], wrong: ['no', '✕', 'wrong'], skipped: ['skip', '–', 'skipped'], timeout: ['skip', '–', 'time ran out'] };
     $('#resDots').innerHTML = r.answers.map((a, i) => {
       const [cls, mark, label] = dot[a.state] || (a.correct ? dot.right : dot.wrong);
-      if (a.bonus) return `<li class="bonus${a.correct ? '' : ' miss'}" style="animation-delay:${0.2 + i * 0.06}s" title="Bonus question: ${label}">${a.correct ? '★' : '☆'}</li>`;
       return `<li class="${cls}" style="animation-delay:${0.2 + i * 0.06}s" title="Question ${i + 1}: ${label}">${mark}</li>`;
     }).join('');
     const notes = [];
@@ -562,7 +516,6 @@
     const pb = $('#resPB');
     pb.hidden = !me || (r.personalBest && !r.score);
     if (me) pb.textContent = r.personalBest ? 'Your best game so far' : `Your best stays ${fmt(me.score)}`;
-    renderCampaign();
     setTab('all');
     const again = $('#againBtn');
     if (r.attemptsLeft === 0) { again.disabled = true; again.textContent = 'No attempts left'; }
@@ -581,7 +534,7 @@
   }
   function renderBoard(el, b, showDistrict) {
     if (!b || !b.top.length) { el.innerHTML = '<p class="empty">No scores yet. Be the first on the board.</p>'; return; }
-    const sub = (x) => esc(showDistrict ? `${x.office}, ${x.district}` : [x.office, x.area].filter(Boolean).join(', '));
+    const sub = (x) => (showDistrict ? esc(x.district) : '');
     const pod = (x, cls) => x ? `<div class="pod ${cls}${x.isMe ? ' me' : ''}"><span class="who">${esc(x.name)}</span><span class="where">${sub(x)}</span>
       <div class="block"><span class="n">${x.rank}</span><span class="s">${fmt(x.score)}</span></div></div>` : '<div></div>';
     const row = (x) => `<div class="row${x.isMe ? ' me' : ''}"><span class="rk">${fmt(x.rank)}</span>
@@ -604,11 +557,9 @@
   }
   async function share() {
     const r = S.result, c = S.cfg || {};
-    const w = campaignWhen();
-    const join = w.days >= 0 ? ` Know the facts and join the ${CAMPAIGN.name} on ${w.short}!` : '';
     const text = r
-      ? `I scored ${fmt(r.score)} in ${c.title || 'the quiz'} (${r.correct}/${r.total} right${r.overall.me ? `, #${r.overall.me.rank} in Kerala` : ''}). Can you beat me?${join}`
-      : `Play ${c.title || 'the quiz'}!${join}`;
+      ? `I scored ${fmt(r.score)} in ${c.title || 'the quiz'} (${r.correct}/${r.total} right${r.overall.me ? `, #${r.overall.me.rank} in Kerala` : ''}). Can you beat me?`
+      : `Play ${c.title || 'the quiz'}!`;
     const url = location.origin + '/';
     if (navigator.share) { try { await navigator.share({ title: c.title, text, url }); return; } catch (e) { if (e.name === 'AbortError') return; } }
     open('https://wa.me/?text=' + encodeURIComponent(text + ' ' + url), '_blank', 'noopener');
@@ -620,11 +571,9 @@
   $('#boardBtn').addEventListener('click', openBoard);
   $('#regForm').addEventListener('submit', submitRegister);
   $('#regForm').name.addEventListener('input', updateAvatar);
-  $('#regForm').district.addEventListener('change', (e) => fillAreas(e.target.value, ''));
   ['input', 'change'].forEach((ev) => $('#regForm').addEventListener(ev, (e) => {
     if (e.target.classList.contains('invalid')) { e.target.classList.remove('invalid'); $('#regError').textContent = ''; }
   }));
-  $('#regForm').phone.addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10); });
   $('#startBtn').addEventListener('click', startGame);
   $('#againBtn').addEventListener('click', startGame);
   $('#options').addEventListener('click', (e) => {
