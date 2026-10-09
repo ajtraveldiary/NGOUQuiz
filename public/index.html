@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#2B0710">
-  <meta name="app-version" content="1.6.10">
+  <meta name="app-version" content="1.6.11">
   <title>Arivu Quiz · Kerala NGO Union</title>
   <meta name="description" content="Kerala NGO Union quiz for the Secretariat Valayal, 21 November 2026. Know the facts, beat the clock, climb the Kerala leaderboard.">
   <meta property="og:title" content="Arivu Quiz · Kerala NGO Union">
@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anek+Malayalam:wght@400;500;600;700;800&family=Big+Shoulders+Display:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=1.6.10">
+  <link rel="stylesheet" href="/style.css?v=1.6.11">
 </head>
 <body>
   <canvas id="confetti" aria-hidden="true"></canvas>
@@ -34,11 +34,11 @@
       <p class="org">Kerala NGO Union <span class="presents">presents</span></p>
       <h1 class="game-title" id="gameTitle"><img class="title-logo" src="/arivu-title.webp" alt="Arivu" width="800" height="231"><span>Quiz</span></h1>
       <p class="tagline" lang="ml">നമുക്ക് അറിവ് നേടാം. അധികാരികൾ തിരിച്ചറിവ് നേടട്ടെ..</p>
-      <div class="ticket" id="campaignTicket" hidden>
-        <div class="ticket-count"><b id="tkBig">43</b><span id="tkUnit">days to go</span></div>
+      <div class="ticket" id="campaignTicket">
+        <div class="ticket-count"><b id="tkBig"></b><span id="tkUnit">days to go</span></div>
         <div class="ticket-body">
-          <p class="ticket-ml" id="tkNameMl" lang="ml"></p>
-          <p class="ticket-meta" id="tkMeta"></p>
+          <p class="ticket-ml" lang="ml">സെക്രട്ടേറിയറ്റ് വളയൽ</p>
+          <p class="ticket-meta">Saturday, 21 November 2026, Thiruvananthapuram</p>
         </div>
       </div>
       <ul class="values" aria-label="Our values"><li>Solidarity</li><li>Democracy</li><li>Secularism</li><li>People-centred public service</li></ul>
@@ -154,14 +154,22 @@
         <p class="rank-line" id="resRankLine"></p>
         <p class="rank-pb" id="resPB" hidden>New personal best</p>
       </div>
-      <section class="camp card" id="campCard" hidden aria-labelledby="campTitle">
+      <section class="camp card" id="campCard" aria-labelledby="campTitle">
         <p class="camp-kicker" id="campKicker">See you on 21 November</p>
-        <h3 id="campTitle" lang="ml"></h3>
-        <p class="camp-meta" id="campMeta"></p>
-        <p class="camp-line" id="campLine"></p>
+        <h3 id="campTitle" lang="ml">സെക്രട്ടേറിയറ്റ് വളയൽ</h3>
+        <p class="camp-meta">Secretariat Valayal, Saturday, 21 November 2026, Thiruvananthapuram</p>
+        <p class="camp-line">Over 25,000 employees and teachers will encircle the Secretariat to protect the rights we have won. Called by the Action Council of State Employees &amp; Teachers.</p>
         <details class="camp-demands">
-          <summary id="campSummary">Why we march</summary>
-          <ol id="campDemands"></ol>
+          <summary>Why we march: 7 demands</summary>
+          <ol>
+            <li>Implement the pay revision now; grant interim relief</li>
+            <li>Withdraw NPS and restore the old pension; repeal the PFRDA Act</li>
+            <li>Implement the DA arrears order without delay</li>
+            <li>Restore earned leave surrender</li>
+            <li>Cancel unfair transfers; hold general transfers as per norms</li>
+            <li>Fix the shortcomings in MEDISEP</li>
+            <li>Drop moves that weaken education and the civil service</li>
+          </ol>
         </details>
       </section>
       <div class="board-wrap">
@@ -200,6 +208,6 @@
   </div>
   <div class="toast" id="toast" role="status" hidden></div>
 
-  <script src="/app.js?v=1.6.10"></script>
+  <script src="/app.js?v=1.6.11"></script>
 </body>
 </html>

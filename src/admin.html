@@ -258,17 +258,6 @@ pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size:
         <label>Question mix for the regular questions (one per line: Category = percent)
           <textarea name="categoryMix" rows="5" placeholder="Political = 60"></textarea></label>
         <p class="hint" style="margin-top:-6px">Names must match the questions' Category. With 10 questions, 60% = 6 questions. Difficulty levels are matched as closely as the pool allows; any shortfall is filled from other questions.</p>
-        <h3>Campaign</h3>
-        <label class="check"><input type="checkbox" name="c_show"> Show the campaign countdown and card</label>
-        <div class="row2">
-          <label>Campaign name (English) <input name="c_name" maxlength="60"></label>
-          <label>Campaign name (Malayalam) <input name="c_nameMl" maxlength="80"></label>
-          <label>Date <input name="c_date" type="date"></label>
-          <label>Place <input name="c_place" maxlength="60"></label>
-        </div>
-        <label>Called by <input name="c_organiser" maxlength="100"></label>
-        <label>One-line message <input name="c_line" maxlength="200"></label>
-        <label>Demands (one per line) <textarea name="c_demands" rows="7"></textarea></label>
         <p class="hint">Changes apply to games started after you save. Games already in progress keep their rules.</p>
         <div class="foot"><button class="btn brass" type="submit">Save settings</button></div>
       </form>
@@ -735,10 +724,6 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     f.n_easy.value = s.penalty.easy; f.n_medium.value = s.penalty.medium; f.n_hard.value = s.penalty.hard;
     f.open.checked = s.open; f.showExplanation.checked = s.showExplanation; f.bonusQuestion.checked = s.bonusQuestion !== false;
     f.categoryMix.value = (s.categoryMix || []).map((m) => `${m.name} = ${m.percent}`).join('\n');
-    const c = s.campaign || {};
-    f.c_show.checked = !!c.show; f.c_name.value = c.name || ''; f.c_nameMl.value = c.nameMl || ''; f.c_date.value = c.date || '';
-    f.c_place.value = c.place || ''; f.c_organiser.value = c.organiser || ''; f.c_line.value = c.line || '';
-    f.c_demands.value = (c.demands || []).join('\n');
   }
   $('#setForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -751,10 +736,6 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
       open: f.open.checked, showExplanation: f.showExplanation.checked, bonusQuestion: f.bonusQuestion.checked,
       categoryMix: f.categoryMix.value.split('\n').map((l) => l.match(/^\s*(.+?)\s*[=:]\s*(\d+)\s*%?\s*$/)).filter(Boolean)
         .map((m) => ({ name: m[1], percent: Number(m[2]) })),
-      campaign: {
-        show: f.c_show.checked, name: f.c_name.value, nameMl: f.c_nameMl.value, date: f.c_date.value, place: f.c_place.value,
-        organiser: f.c_organiser.value, line: f.c_line.value, demands: f.c_demands.value.split('\n').map((v) => v.trim()).filter(Boolean),
-      },
     };
     try { await api('PUT', 'settings', data); toast('Settings saved'); loadSettings(); } catch (ex) { toast(ex.message); }
   });
