@@ -41,7 +41,7 @@ scripts/           local server, API tests, demo build
    npx wrangler secret put ADMIN_PASSWORD   # admin page password
    ```
 3. In `wrangler.toml`, change `ADMIN_PATH` to a path only your team knows (e.g. `ngou-desk-4831`).
-4. `npm run deploy`. The game is at `https://ngo-union-quiz.<your-subdomain>.workers.dev/`, the admin page at `/<ADMIN_PATH>`.
+4. `npm run deploy`. When it finishes, it prints the game's web address (also shown in the Cloudflare dashboard under *Workers & Pages → ngo-union-quiz*). The admin page is that address followed by `/` and your `ADMIN_PATH`.
 5. Optional: Workers → your worker → *Settings → Domains & Routes* to add `quiz.keralangounion.in`.
 
 ## Try it locally without Neon
@@ -88,7 +88,7 @@ The version number shows in small text on the opening screen, in the admin heade
 
 ## Troubleshooting
 
-Open `https://<your-worker>/api/health`. It reports whether the database connects, the number of questions, players and areas, and whether `APP_SECRET` and `ADMIN_PASSWORD` are set. If something is wrong it says what to fix, for example a wrong `DATABASE_URL`.
+Open the game's address followed by `/api/health`. It reports whether the database connects, the number of questions, players and areas, and whether `APP_SECRET` and `ADMIN_PASSWORD` are set. If something is wrong it says what to fix, for example a wrong `DATABASE_URL`.
 
 ## Before launch
 
