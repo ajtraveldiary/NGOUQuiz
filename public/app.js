@@ -179,9 +179,13 @@
     const c = S.cfg || { title: 'Arivu Quiz', values: [], districts: [], areas: {}, totalQuestions: 10, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
     S.total = c.totalQuestions;
     const words = String(c.title).trim().split(/\s+/);
-    const first = words.length > 1 ? words.slice(0, Math.ceil(words.length / 2)).join(' ') : words[0];
-    const second = words.length > 1 ? words.slice(Math.ceil(words.length / 2)).join(' ') : '';
-    $('#gameTitle').innerHTML = `<span>${esc(first)}</span>${second ? `<span>${esc(second)}</span>` : ''}`;
+    // "Arivu" is drawn with the Malayalam logotype; any other title is shown as text
+    if (/^arivu$/i.test(words[0])) $('#gameTitle span').textContent = words.slice(1).join(' ');
+    else {
+      const first = words.length > 1 ? words.slice(0, Math.ceil(words.length / 2)).join(' ') : words[0];
+      const second = words.length > 1 ? words.slice(Math.ceil(words.length / 2)).join(' ') : '';
+      $('#gameTitle').innerHTML = `<span>${esc(first)}</span>${second ? `<span>${esc(second)}</span>` : ''}`;
+    }
     document.title = c.title + (c.subtitle ? ' | ' + c.subtitle : '');
     if (c.subtitle) $('#orgName').textContent = c.subtitle;
     if (c.tagline) $('#tagline').textContent = c.tagline;

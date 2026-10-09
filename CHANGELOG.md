@@ -3,6 +3,9 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.7
+- Opening screen: "Arivu" in the title is now the Malayalam logotype (`public/arivu-title.webp`); "Quiz" stays below it. A different title set in Settings still shows as text
+
 ## 1.6.6
 - How to play: the English "Example: …" box is removed
 

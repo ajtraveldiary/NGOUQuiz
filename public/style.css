@@ -92,7 +92,8 @@ button { cursor: pointer; }
 }
 .game-title span:first-child { color: #fff; }
 .game-title span:last-child { color: var(--brass); -webkit-text-stroke: 0; }
-.splash .game-title span { animation: rise .7s cubic-bezier(.2, .9, .3, 1.3) both; }
+.game-title .title-logo { display: block; width: min(80vw, 340px); height: auto; margin: 6px auto 10px; }
+.splash .game-title span, .splash .game-title .title-logo { animation: rise .7s cubic-bezier(.2, .9, .3, 1.3) both; }
 .splash .game-title span:last-child { animation-delay: .12s; }
 @keyframes rise { from { opacity: 0; transform: translateY(40px) scale(.9); } }
 .tagline { margin: 4px 0 0; font-size: 19px; font-weight: 600; }
