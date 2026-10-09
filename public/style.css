@@ -86,7 +86,8 @@ button { cursor: pointer; }
 .splash { justify-content: center; text-align: center; gap: 14px; padding-top: 40px; }
 .flagpole { width: 210px; height: 136px; margin: 0 auto 6px; position: relative; }
 .flagpole::before { content: ''; position: absolute; left: 0; top: 0; bottom: -40px; width: 6px; border-radius: 3px; background: var(--brass); }
-.flag { position: absolute; left: 6px; top: 4px; width: 200px; height: 124px; transform-origin: left center; animation: wave 2.6s ease-in-out infinite; }
+/* waves three times on arrival, then rests (an endless animation keeps weak phones busy) */
+.flag { position: absolute; left: 6px; top: 4px; width: 200px; height: 124px; transform-origin: left center; animation: wave 2.6s ease-in-out 3; }
 .flag svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .flag-logo { position: absolute; left: 50%; top: 49%; height: 56%; width: auto; transform: translate(-50%, -50%); }
 .flag-cloth { fill: var(--red); filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .35)); }
@@ -122,13 +123,11 @@ button { cursor: pointer; }
 .ticket-body { padding: 10px 14px; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
 .ticket-ml { margin: 0; font-weight: 800; font-size: 21px; line-height: 1.25; color: var(--red-deep); }
 .ticket-meta { margin: 0; font-size: 14px; font-weight: 600; color: #6B4A45; }
-.splash-stats { color: var(--mist); font-size: 15px; min-height: 64px; }
-.splash-stats.in { animation: fadeIn .4s ease both; }
-@keyframes fadeIn { from { opacity: 0; } }
+.splash-stats { margin: 0; color: var(--mist); font-size: 15px; }
 .next-btn.busy { opacity: .7; }
 .result.pending .badge, .result.pending .answer-dots, .result.pending .res-note,
 .result.pending .res-stats, .result.pending .rank-card { visibility: hidden; }
-.splash-stats b { color: var(--brass); font-family: var(--display); font-size: 22px; letter-spacing: .02em; }
+.splash-stats b { color: var(--brass); font-family: var(--display); font-weight: 800; font-size: 22px; letter-spacing: .02em; }
 .ver { margin: 8px 0 0; font-size: 11px; color: var(--mist-2); opacity: .7; letter-spacing: .03em; }
 .splash-actions { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 16px; }
 
@@ -175,7 +174,7 @@ button { cursor: pointer; }
 }
 .points-table { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .points-table div { border-radius: var(--r-sm); padding: 8px 6px; text-align: center; background: #F1E3D3; }
-.points-table b { display: block; font-family: var(--display); font-size: 28px; line-height: 1; }
+.points-table b { display: block; font-family: var(--display); font-weight: 800; font-size: 28px; line-height: 1; }
 .points-table span { font-size: 13px; font-weight: 600; }
 .points-table .easy b { color: var(--leaf-deep); }
 .points-table .medium b { color: var(--brass-deep); }
@@ -200,6 +199,7 @@ button { cursor: pointer; }
 .timer svg { position: absolute; inset: 0; transform: rotate(-90deg); }
 .t-track { fill: var(--night-2); stroke: rgba(255, 255, 255, .1); stroke-width: 9; }
 .t-ring { fill: none; stroke: var(--brass); stroke-width: 9; stroke-linecap: round; stroke-dasharray: 326.73; stroke-dashoffset: 0; transition: stroke .3s; }
+@keyframes ring { to { stroke-dashoffset: 326.73; } }
 #timerText { position: relative; font-family: var(--display); font-weight: 900; font-size: 44px; font-variant-numeric: tabular-nums; }
 .timer.low .t-ring { stroke: var(--red); }
 .timer.low { animation: throb .5s ease-in-out infinite alternate; }
@@ -360,6 +360,9 @@ button { cursor: pointer; }
   .app { padding-top: 24px; }
   .screen { min-height: calc(100dvh - 24px); }
 }
+/* Light mode for weak phones (set by app.js): no endless or decorative motion */
+.lite .flag, .lite .timer.low, .lite .opt, .lite .opt.chosen, .lite .question.in, .lite .screen.is-active,
+.lite .splash .game-title span, .lite .splash .game-title .title-logo, .lite .answer-dots li { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

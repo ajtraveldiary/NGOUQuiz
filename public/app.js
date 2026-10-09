@@ -5,6 +5,12 @@
   const fmt = (n) => Number(n || 0).toLocaleString('en-IN');
   const secs = (ms) => (ms / 1000).toFixed(1).replace(/\.0$/, '') + 's';
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Light mode for weak phones: no endless animations and no confetti (see .lite in style.css).
+  // Turned on up front from what the phone reports, or after a quick speed test once the page has loaded.
+  let lite = reduceMotion || navigator.connection?.saveData === true
+    || (navigator.deviceMemory > 0 && navigator.deviceMemory <= 2) || (navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 2);
+  const goLite = () => { lite = true; document.documentElement.classList.add('lite'); };
+  if (lite) goLite();
   const store = {
     get(k) { try { return JSON.parse(localStorage.getItem('arivu.' + k)); } catch { return null; } },
     set(k, v) { try { localStorage.setItem('arivu.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
@@ -64,10 +70,10 @@
     const cv = $('#confetti'), ctx = cv.getContext('2d');
     const colors = ['#D7262E', '#F2B33D', '#2FA36B', '#FBF3E8', '#FF8A8F'];
     let parts = [], raf = 0, dpr = 1;
-    const size = () => { dpr = Math.min(2, devicePixelRatio || 1); cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; };
+    const size = () => { dpr = Math.min(1.5, devicePixelRatio || 1); cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; };
     addEventListener('resize', size); size();
     function add(x, y, n, spread, up) {
-      if (reduceMotion) return;
+      if (reduceMotion || lite) return;
       for (let i = 0; i < n; i++) {
         const a = (-Math.PI / 2) + (Math.random() - 0.5) * spread, v = up * (0.6 + Math.random() * 0.7);
         parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, r: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.4,
@@ -91,8 +97,8 @@
       if (!raf) ctx.clearRect(0, 0, innerWidth, innerHeight);
     }
     return {
-      burstAt(el) { const r = el.getBoundingClientRect(); add(r.left + r.width / 2, r.top + r.height / 2, 90, 2.2, 15); },
-      celebrate() { add(innerWidth * 0.15, innerHeight, 120, 0.9, 24); add(innerWidth * 0.85, innerHeight, 120, 0.9, 24); setTimeout(() => add(innerWidth / 2, innerHeight, 100, 1.4, 26), 350); },
+      burstAt(el) { const r = el.getBoundingClientRect(); add(r.left + r.width / 2, r.top + r.height / 2, 45, 2.2, 15); },
+      celebrate() { add(innerWidth * 0.15, innerHeight, 60, 0.9, 24); add(innerWidth * 0.85, innerHeight, 60, 0.9, 24); setTimeout(() => add(innerWidth / 2, innerHeight, 50, 1.4, 26), 350); },
     };
   })();
 
@@ -123,7 +129,7 @@
   const S = {
     cfg: null, me: store.get('player'), // { playerKey, player:{name,office,district,phone} }
     gameId: null, total: 10, q: null, answered: false, score: 0, streak: 0, lastLevel: null,
-    timer: { raf: 0, end: 0, lastSec: null }, nextT: 0, skipT: 0, skipArmT: 0, skipArmed: 0, result: null,
+    timer: { t: 0, end: 0, lastSec: null }, nextT: 0, skipT: 0, skipArmT: 0, skipArmed: 0, result: null,
   };
 
   // ---------- campaign (Secretariat Valayal) ----------
@@ -152,10 +158,9 @@
     $('#soundBtn').setAttribute('aria-pressed', String(Sound.on));
     $('#soundBtn').setAttribute('aria-label', Sound.on ? 'Sound on' : 'Sound off');
     try { renderCampaign(); } catch (e) { console.error('campaign', e); }
-    // Show the player's button and the last known stats straight away; both requests run side by side
+    // The player's button shows straight away; the stats request runs alongside the settings request
     renderSplashPlayer();
-    renderStats(store.get('stats'));
-    const board = API.board('', S.me?.playerKey).then((b) => { store.set('stats', b && { plays: b.plays, total: b.total, top: b.top.slice(0, 1), me: b.me }); renderStats(b); }).catch(() => {});
+    const board = API.board('', S.me?.playerKey).then(renderStats).catch(() => {});
     try { S.cfg = await API.config(); } catch (e) { toast(e.message); S.cfg = null; }
     // A phone can keep an old cached copy of the page after an update. If the page is older than the
     // server, load the fresh page once (the guard stops a reload loop while a deploy is still rolling out).
@@ -180,16 +185,25 @@
     // Once the opening screen has fully loaded (images, fonts, play count), bring "Play now" into view
     const loaded = new Promise((ok) => (document.readyState === 'complete' ? ok() : addEventListener('load', ok, { once: true })));
     Promise.all([loaded, document.fonts?.ready, board]).then(() => setTimeout(scrollToPlay, 300));
+    loaded.then(() => setTimeout(probeSpeed, 800));
   }
-  // The stats lines keep their space from the start, so nothing below them jumps when they arrive
+  // A small fixed piece of work, timed three times (the fastest run counts, so a hiccup doesn't decide).
+  // About 3 ms on a laptop; over 15 ms means a phone roughly 6x slower, so use light mode.
+  function probeSpeed(runs = []) {
+    if (lite) return;
+    const t0 = performance.now(); let x = 0;
+    for (let i = 0; i < 1e5; i++) x += Math.sqrt(i) * Math.sin(i);
+    runs.push(x === -1 ? 0 : performance.now() - t0); // (x is read so the loop is not optimised away)
+    if (runs.length < 3) return setTimeout(() => probeSpeed(runs), 60);
+    if (Math.min(...runs) > 15) goLite();
+  }
+  // The stats text is fixed in index.html (starting at 0); only the numbers change, counting up once the data arrives
   function renderStats(b) {
     if (!b) return;
-    const lines = [];
-    if (b.plays) lines.push(`<b>${fmt(b.plays)}</b> ${b.plays === 1 ? 'employee has' : 'employees have'} played so far`);
-    if (b.total) lines.push(`Top score <b>${fmt(b.top?.[0]?.score)}</b>` + (b.me ? `. You’re <b>#${fmt(b.me.rank)}</b>` : ''));
-    const el = $('#splashStats'), html = lines.join('<br>');
-    if (el.innerHTML === html) return;
-    el.innerHTML = html; el.classList.remove('in'); void el.offsetWidth; el.classList.add('in');
+    countUp($('#statPlays'), 0, b.plays || 0, 900);
+    countUp($('#statTop'), 0, b.top?.[0]?.score || 0, 900);
+    if (b.me) $('#statRank').textContent = fmt(b.me.rank);
+    $('#statMe').hidden = !b.me;
   }
   // Don't move the page if the player has already scrolled or tapped
   let touched = false;
@@ -356,22 +370,27 @@
     startTimer(q.remainingMs, q.limitMs);
   }
 
+  // The ring is one CSS animation (no per-frame script); the number is updated once a second
   function startTimer(remaining, limit) {
-    cancelAnimationFrame(S.timer.raf);
-    const ring = $('#timerRing'), txt = $('#timerText'), wrap = $('#timer'), C = 326.73;
+    clearTimeout(S.timer.t);
+    const ring = $('#timerRing'), txt = $('#timerText'), wrap = $('#timer');
     S.timer.end = performance.now() + remaining; S.timer.lastSec = null;
     wrap.classList.remove('low');
-    const frame = (t) => {
-      const left = Math.max(0, S.timer.end - t), sec = Math.ceil(left / 1000);
-      ring.style.strokeDashoffset = String(C * (1 - left / limit));
+    ring.style.animation = 'none'; void ring.getBoundingClientRect();
+    ring.style.animation = 'ring linear forwards';
+    // 'important' so the reduced-motion rule (which shortens every animation) leaves the clock alone
+    ring.style.setProperty('animation-duration', limit + 'ms', 'important');
+    ring.style.setProperty('animation-delay', (remaining - limit) + 'ms', 'important');
+    const tick = () => {
+      const left = Math.max(0, S.timer.end - performance.now()), sec = Math.ceil(left / 1000);
       if (sec !== S.timer.lastSec) {
         S.timer.lastSec = sec; txt.textContent = sec;
         if (sec <= 5 && sec > 0) { wrap.classList.add('low'); Sound.tick(); }
       }
       if (left <= 0) { wrap.classList.remove('low'); return submit(null); }
-      S.timer.raf = requestAnimationFrame(frame);
+      S.timer.t = setTimeout(tick, (left % 1000 || 1000) + 5);
     };
-    S.timer.raf = requestAnimationFrame(frame);
+    tick();
   }
   // Skip needs two taps: the first arms it, the second (not a fast double-tap) skips
   function armSkip() {
@@ -385,7 +404,7 @@
     const sk = $('#skipBtn'); sk.classList.remove('armed');
     sk.innerHTML = 'Skip question <small>no marks lost</small>';
   }
-  function stopTimer() { cancelAnimationFrame(S.timer.raf); $('#timer').classList.remove('low'); }
+  function stopTimer() { clearTimeout(S.timer.t); $('#timerRing').style.animationPlayState = 'paused'; $('#timer').classList.remove('low'); }
 
   async function submit(choice, attempt = 0) {
     if (S.answered && attempt === 0) return;

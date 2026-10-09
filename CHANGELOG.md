@@ -3,6 +3,17 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.7.1
+- Opening screen stats are fixed text in the page: "0 employees have played so far / Top score 0." Only the numbers change, counting up once the data arrives ("You’re #N" is added for a player on the board). No saved copy on the phone any more
+
+## 1.7.0 — smoother on low-powered phones
+- Question timer: the ring is a single CSS animation instead of being redrawn by script about 60 times a second; the number updates once a second
+- The flag waves three times when the page opens, then rests
+- Confetti: half as many pieces, drawn at a lower resolution
+- Light mode for weak phones: no endless or decorative motion and no confetti. It turns on for phones that report 2 GB of memory or less, 2 processor cores or fewer, or Data Saver, for reduced motion, or when a quick speed test after loading shows a phone roughly 6x slower than a laptop
+- One font file fewer (Big Shoulders 700 was only used by inheritance)
+- Server: a new question takes 1 database round trip instead of 3, an answer 2 instead of 4
+
 ## 1.6.19
 - Smoother loading:
   - Opening screen: the player's button and the last known stats show straight away; the stats keep their space, so "Play now" no longer jumps down when they arrive, and they fade in when they change. The stats request runs alongside the settings request instead of after it
