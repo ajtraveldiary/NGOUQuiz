@@ -418,6 +418,8 @@ console.log('✓ admin: stats, question CRUD, import, players, void/restore, exp
   assert.equal((await call('POST', '/api/register', other, { origin: 'https://quiz.test' })).status, 200, 'the game itself can');
   const denied = await worker.fetch(new Request('https://quiz.test/api/config'), { ...env, RL_READ: { limit: async () => ({ success: false }) } }, {});
   assert.equal(denied.status, 429, 'uses the Cloudflare binding when present');
+  const broken = await worker.fetch(new Request('https://quiz.test/api/config', { headers: at('203.0.113.99') }), { ...env, RL_READ: { limit: async () => { throw new Error('binding down'); } } }, {});
+  assert.equal(broken.status, 200, 'a failing Cloudflare binding does not break the game');
   console.log('✓ rate limits per address and per player, Retry-After, other sites blocked, Cloudflare binding used');
 }
 console.log('\nAll API tests passed.');
