@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#2B0710">
-  <meta name="app-version" content="1.9.1">
-  <title>Arivu Quiz · Kerala NGO Union</title>
-  <meta name="description" content="Kerala NGO Union quiz for the Secretariat Valayal, 21 November 2026. Know the facts, beat the clock, climb the Kerala leaderboard.">
-  <meta property="og:title" content="Arivu Quiz · Kerala NGO Union">
-  <meta property="og:description" content="Know the facts. Join the Secretariat Valayal on 21 November 2026.">
+  <meta name="app-version" content="2.0.0">
+  <title>Arivu Quiz</title>
+  <meta name="description" content="A quick quiz: know the facts, beat the clock, climb the Kerala leaderboard.">
+  <meta property="og:title" content="Arivu Quiz">
+  <meta property="og:description" content="Know the facts, beat the clock, climb the Kerala leaderboard.">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anek+Malayalam:wght@400;500;600;700;800&family=Big+Shoulders+Display:wght@800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=1.9.1">
+  <link rel="stylesheet" href="/style.css?v=2.0.0">
 </head>
 <body>
   <canvas id="confetti" aria-hidden="true"></canvas>
@@ -25,22 +25,8 @@
 
     <!-- 1. Splash -->
     <section id="screen-splash" class="screen splash is-active" aria-labelledby="gameTitle">
-      <div class="flagpole">
-        <div class="flag">
-          <svg viewBox="0 0 220 140" preserveAspectRatio="none" aria-hidden="true"><path class="flag-cloth" d="M0 10 C40 0 70 22 110 12 S180 0 220 12 L220 122 C180 112 150 134 110 124 S40 112 0 130 Z"/></svg>
-          <img class="flag-logo" src="/logo.webp" alt="Kerala NGO Union torch emblem" width="206" height="216" fetchpriority="high">
-        </div>
-      </div>
-      <p class="org">Kerala NGO Union <span class="presents">presents</span></p>
       <h1 class="game-title" id="gameTitle"><img class="title-logo" src="/arivu-title.webp" alt="Arivu" width="800" height="231"><span>Quiz</span></h1>
       <p class="tagline" lang="ml">നമുക്ക് അറിവ് നേടാം.<br>അധികാരികൾ തിരിച്ചറിവ് നേടട്ടെ..</p>
-      <div class="ticket" id="campaignTicket">
-        <div class="ticket-count"><b id="tkBig">0</b><span id="tkUnit">days to go</span></div>
-        <div class="ticket-body">
-          <p class="ticket-ml" lang="ml">സെക്രട്ടേറിയറ്റ് വളയൽ</p>
-          <p class="ticket-meta">Saturday, 21 November 2026, Thiruvananthapuram</p>
-        </div>
-      </div>
       <p class="splash-stats" id="splashStats" aria-live="polite"><b id="statPlays">0</b> employees have played so far<br>Top score <b id="statTop">0</b>.<span id="statMe" hidden> You’re <b>#<span id="statRank">1</span></b></span></p>
       <div class="splash-actions">
         <button class="btn btn-brass btn-big" id="playBtn" type="button">Play now</button>
@@ -61,25 +47,13 @@
       <form id="regForm" class="card player-card" novalidate>
         <div class="avatar" id="avatar" aria-hidden="true">?</div>
         <label class="field">
-          <span>Name</span>
-          <input name="name" autocomplete="name" maxlength="80" required placeholder="As you want it on the leaderboard">
-        </label>
-        <label class="field">
-          <span>Office</span>
-          <input name="office" autocomplete="organization" maxlength="120" required placeholder="e.g. PHC Kallara, Collectorate Kollam">
+          <span>Name or nickname</span>
+          <input name="name" autocomplete="nickname" maxlength="80" required placeholder="As you want it on the leaderboard">
         </label>
         <label class="field">
           <span>District</span>
           <select name="district" required><option value="">Choose your district</option></select>
-        </label>
-        <label class="field" id="areaField" hidden>
-          <span>Area</span>
-          <select name="area"><option value="">Choose your area</option></select>
-        </label>
-        <label class="field">
-          <span>Mobile number</span>
-          <div class="phone"><span class="cc">+91</span><input name="phone" inputmode="numeric" autocomplete="tel-national" maxlength="10" required placeholder="10-digit mobile"></div>
-          <small>Used only to identify you on the leaderboard. Never shown publicly.</small>
+          <small>That's all we ask. No phone number, no office.</small>
         </label>
         <p class="form-error" id="regError" role="alert"></p>
         <button class="btn btn-brass btn-big" type="submit" id="regSubmit">Save and continue</button>
@@ -95,7 +69,7 @@
         <h2 id="rulesTitle">How to play</h2>
       </header>
       <div class="card rules-card">
-        <p class="welcome" id="welcomeLine">Welcome, comrade.</p>
+        <p class="welcome" id="welcomeLine">Welcome.</p>
         <ol class="rules">
           <li><span id="ruleCount">10</span> ചോദ്യങ്ങൾ, ഓരോന്നിനും <span id="ruleTime">15</span> സെക്കൻഡ്.</li>
           <li>വേഗത്തിൽ ഉത്തരം നൽകിയാൽ കൂടുതൽ പോയിന്റ്.</li>
@@ -138,7 +112,7 @@
 
     <!-- 5. Results -->
     <section id="screen-result" class="screen result" aria-labelledby="resTitle">
-      <p class="badge" id="resBadge">Union Star</p>
+      <p class="badge" id="resBadge">Expert</p>
       <h2 id="resTitle" class="sr-only">Your result</h2>
       <p class="final-score"><span id="resScore">0</span><small>points</small></p>
       <ol class="answer-dots" id="resDots" aria-label="Your answers"></ol>
@@ -153,24 +127,6 @@
         <p class="rank-line" id="resRankLine"></p>
         <p class="rank-pb" id="resPB" hidden>New personal best</p>
       </div>
-      <section class="camp card" id="campCard" aria-labelledby="campTitle">
-        <p class="camp-kicker" id="campKicker">See you on 21 November</p>
-        <h3 id="campTitle" lang="ml">സെക്രട്ടേറിയറ്റ് വളയൽ</h3>
-        <p class="camp-meta">Secretariat Valayal, Saturday, 21 November 2026, Thiruvananthapuram</p>
-        <p class="camp-line">Over 25,000 employees and teachers will encircle the Secretariat to protect the rights we have won. Called by the Action Council of State Employees &amp; Teachers.</p>
-        <details class="camp-demands">
-          <summary>Why we march: 7 demands</summary>
-          <ol>
-            <li>Implement the pay revision now; grant interim relief</li>
-            <li>Withdraw NPS and restore the old pension; repeal the PFRDA Act</li>
-            <li>Implement the DA arrears order without delay</li>
-            <li>Restore earned leave surrender</li>
-            <li>Cancel unfair transfers; hold general transfers as per norms</li>
-            <li>Fix the shortcomings in MEDISEP</li>
-            <li>Drop moves that weaken education and the civil service</li>
-          </ol>
-        </details>
-      </section>
       <div class="board-wrap">
         <div class="tabs" role="tablist">
           <button role="tab" class="tab is-on" id="tabAll" aria-selected="true" type="button">All Kerala</button>
@@ -207,6 +163,6 @@
   </div>
   <div class="toast" id="toast" role="status" hidden></div>
 
-  <script src="/app.js?v=1.9.1"></script>
+  <script src="/app.js?v=2.0.0"></script>
 </body>
 </html>

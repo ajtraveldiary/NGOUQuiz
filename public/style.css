@@ -1,5 +1,5 @@
-/* Arivu Quiz — Kerala NGO Union
-   Palette: night maroon (banner cloth at dusk), union red, lamp brass, Kerala leaf green, khadi card face */
+/* Arivu Quiz
+   Palette: night maroon, red, brass, leaf green, card cream */
 :root {
   --night: #2B0710;
   --night-2: #3D0B17;
@@ -84,18 +84,6 @@ button { cursor: pointer; }
 
 /* ---------- splash ---------- */
 .splash { justify-content: center; text-align: center; gap: 14px; padding-top: 40px; }
-.flagpole { width: 210px; height: 136px; margin: 0 auto 6px; position: relative; }
-.flagpole::before { content: ''; position: absolute; left: 0; top: 0; bottom: -40px; width: 6px; border-radius: 3px; background: var(--brass); }
-/* waves three times on arrival, then rests (an endless animation keeps weak phones busy) */
-.flag { position: absolute; left: 6px; top: 4px; width: 200px; height: 124px; transform-origin: left center; animation: wave 2.6s ease-in-out 3; }
-.flag svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.flag-logo { position: absolute; left: 50%; top: 49%; height: 56%; width: auto; transform: translate(-50%, -50%); }
-.flag-cloth { fill: var(--red); filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .35)); }
-@keyframes wave { 50% { transform: skewY(-3deg) scaleX(.95); } }
-/* sits under the flag, beside the pole (cancels the flagpole's bottom margin and the splash gap) */
-.org { margin: -20px 0 0; color: var(--mist); font-weight: 600; font-size: 15px; line-height: 1.3; position: relative; }
-.org .presents { display: block; font-weight: 500; font-style: italic; color: var(--mist-2); }
-.org + .game-title { margin-top: -12px; }
 .game-title {
   margin: 0; font-family: var(--display); font-weight: 900; line-height: .82;
   font-size: clamp(88px, 30vw, 132px); letter-spacing: -.01em; text-transform: uppercase;
@@ -108,21 +96,6 @@ button { cursor: pointer; }
 .splash .game-title span:last-child { animation-delay: .12s; }
 @keyframes rise { from { opacity: 0; transform: translateY(40px) scale(.9); } }
 .tagline { margin: 4px 0 0; font-size: clamp(16px, 5.2vw, 19px); font-weight: 600; }
-/* campaign ticket: countdown stub + programme name */
-.ticket {
-  display: grid; grid-template-columns: auto 1fr; align-items: stretch; text-align: left;
-  margin: 6px auto 0; width: 100%; max-width: 380px; border-radius: var(--r-md); overflow: hidden;
-  background: var(--khadi); color: var(--ink); box-shadow: 0 6px 0 rgba(0, 0, 0, .25);
-}
-.ticket-count {
-  background: var(--red); color: #fff; padding: 10px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  border-right: 3px dashed var(--khadi); min-width: 92px;
-}
-.ticket-count b { font-family: var(--display); font-weight: 900; font-size: 44px; line-height: .9; font-variant-numeric: tabular-nums; }
-.ticket-count span { font-size: 13px; font-weight: 700; white-space: nowrap; }
-.ticket-body { padding: 10px 14px; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
-.ticket-ml { margin: 0; font-weight: 800; font-size: 21px; line-height: 1.25; color: var(--red-deep); }
-.ticket-meta { margin: 0; font-size: 14px; font-weight: 600; color: #6B4A45; }
 .splash-stats { margin: 0; color: var(--mist); font-size: 15px; }
 .next-btn.busy { opacity: .7; }
 .result.pending .badge, .result.pending .answer-dots, .result.pending .res-note,
@@ -157,9 +130,6 @@ button { cursor: pointer; }
 .field input:focus, .field select:focus { border-color: var(--red); outline: none; box-shadow: 0 0 0 3px rgba(215, 38, 46, .18); }
 .field small { color: #7A5A55; font-size: 13px; }
 .field .invalid { border-color: var(--red); }
-.phone { display: flex; align-items: stretch; }
-.phone .cc { display: grid; place-items: center; padding: 0 12px; background: #F1E3D3; border: 2px solid #E6D3C2; border-right: 0; border-radius: var(--r-sm) 0 0 var(--r-sm); font-weight: 700; }
-.phone input { border-radius: 0 var(--r-sm) var(--r-sm) 0; letter-spacing: .06em; }
 .form-error { margin: 0; min-height: 1.2em; color: var(--red-deep); font-weight: 600; font-size: 15px; }
 .field-dark select { background-color: var(--night-2); color: #fff; border-color: var(--night-3); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%23F3D3CB' stroke-width='2'/%3E%3C/svg%3E"); }
 
@@ -312,19 +282,6 @@ button { cursor: pointer; }
 .rank-line { margin: 4px 0 0; font-weight: 600; }
 .rank-pb { margin: 8px auto 0; display: inline-block; padding: 2px 12px; border-radius: 999px; background: var(--brass); font-weight: 700; font-size: 14px; }
 .res-actions { display: flex; flex-direction: column; gap: 10px; }
-.camp { text-align: left; display: flex; flex-direction: column; gap: 4px; border-top: 6px solid var(--red); }
-.camp-kicker { margin: 0; font-size: 14px; font-weight: 700; color: var(--red); }
-.camp h3 { margin: 0; font-size: 26px; line-height: 1.25; font-weight: 800; }
-.camp-meta { margin: 0; font-weight: 600; color: #6B4A45; font-size: 15px; }
-.camp-line { margin: 4px 0 0; font-size: 15px; }
-.camp-demands summary { cursor: pointer; font-weight: 700; margin-top: 6px; color: var(--red-deep); }
-.camp-demands ol { margin: 8px 0 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
-.level.bonus { background: var(--red); color: #fff; }
-.march li.bonus-slot { flex: 1.6; background: rgba(242, 179, 61, .25); }
-.march li.bonus-slot.now { background: var(--brass); }
-.answer-dots li.bonus { background: var(--brass); color: var(--ink); }
-.answer-dots li.bonus.miss { background: var(--night-3); color: var(--brass); }
-.lu-level.bonus { color: var(--brass); }
 
 /* leaderboard */
 .board-wrap { display: flex; flex-direction: column; gap: 10px; }
@@ -361,7 +318,7 @@ button { cursor: pointer; }
   .screen { min-height: calc(100dvh - 24px); }
 }
 /* Light mode for weak phones (set by app.js): no endless or decorative motion */
-.lite .flag, .lite .timer.low, .lite .opt, .lite .opt.chosen, .lite .question.in, .lite .screen.is-active,
+.lite .timer.low, .lite .opt, .lite .opt.chosen, .lite .question.in, .lite .screen.is-active,
 .lite .splash .game-title span, .lite .splash .game-title .title-logo, .lite .answer-dots li { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

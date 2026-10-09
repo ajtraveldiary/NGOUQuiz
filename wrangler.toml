@@ -17,7 +17,7 @@ fallthrough = true
 [vars]
 # The hidden admin page lives at https://<your-domain>/<ADMIN_PATH>
 # Change this to something only your team knows.
-ADMIN_PATH = "union-control-room"
+ADMIN_PATH = "desk-ydxesk4m"
 
 # Secrets — set with:  npx wrangler secret put <NAME>
 #   DATABASE_URL    Neon connection string (postgresql://…?sslmode=require)
