@@ -79,7 +79,7 @@ On its first request the Worker creates any missing tables, upgrades older datab
 
 - 10 regular questions: 6 Political, 1 Constitution, 2 KSR & Govt rules, 1 General political (Settings → Question mix), ordered 4 easy → 4 medium → 2 hard.
 - Then 1 bonus question about the campaign programme (questions ticked "Bonus question about the campaign"). Never more than one per game; a wrong bonus answer loses no marks.
-- Campaign countdown and card (name, date, place, message, demands) are edited under Settings → Campaign.
+- Campaign countdown and card (name, date, place, message, demands) are fixed in `public/index.html`; only the countdown is worked out in `public/app.js` (`CAMPAIGN`), with no wait for the server.
 - Question sources: `scripts/mix-questions.py` (Constitution, KSR, General political) and `scripts/valayal-questions.py` (brochure) write into `db/seed-questions.json`.
 
 ## Version

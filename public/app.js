@@ -127,42 +127,31 @@
   };
 
   // ---------- campaign (Secretariat Valayal) ----------
+  // The event details are fixed in index.html; only the countdown is worked out here
+  const CAMPAIGN = { name: 'Secretariat Valayal', date: '2026-11-21' };
   const IST = 5.5 * 3600e3;
-  function campaignWhen(c) {
-    if (!c || !/^\d{4}-\d{2}-\d{2}$/.test(c.date || '')) return null;
-    const target = Date.parse(c.date + 'T00:00:00+05:30');
+  function campaignWhen() {
+    const target = Date.parse(CAMPAIGN.date + 'T00:00:00+05:30');
     const today = Date.parse(new Date(Date.now() + IST).toISOString().slice(0, 10) + 'T00:00:00+05:30');
     const days = Math.round((target - today) / 864e5);
-    const part = (o) => new Date(target).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', ...o });
-    const long = `${part({ weekday: 'long' })}, ${part({ day: 'numeric', month: 'long', year: 'numeric' })}`;
     const short = new Date(target).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' });
-    return { days, long, short };
+    return { days, short };
   }
   function renderCampaign() {
     if (!$('#campaignTicket') || !$('#campCard')) return; // page without the campaign parts
-    const c = S.cfg?.campaign, w = campaignWhen(c);
-    $('#campaignTicket').hidden = !c || !w;
-    $('#campCard').hidden = !c || !w;
-    if (!c || !w) return;
+    const w = campaignWhen();
     const big = w.days > 1 ? String(w.days) : w.days === 1 ? '1' : w.days === 0 ? 'Today' : '✓';
     const unit = w.days > 1 ? 'days to go' : w.days === 1 ? 'day to go' : w.days === 0 ? 'Join us' : 'Held';
     $('#tkBig').textContent = big; $('#tkUnit').textContent = unit;
     $('#tkBig').style.fontSize = big.length > 3 ? '30px' : '';
-    $('#tkNameMl').textContent = c.nameMl || c.name;
-    $('#tkMeta').textContent = [w.long, c.place].filter(Boolean).join(', ');
     $('#campKicker').textContent = w.days > 0 ? `See you on ${w.short}. ${w.days} day${w.days === 1 ? '' : 's'} to go.` : w.days === 0 ? 'It is today. Join us.' : `Held on ${w.short}.`;
-    $('#campTitle').textContent = c.nameMl || c.name;
-    $('#campMeta').textContent = [c.nameMl ? c.name : '', w.long, c.place].filter(Boolean).join(', ');
-    $('#campLine').textContent = [c.line, c.organiser ? `Called by the ${c.organiser}.` : ''].filter(Boolean).join(' ');
-    $('#campSummary').textContent = `Why we march: ${c.demands?.length || 0} demands`;
-    $('#campDemands').innerHTML = (c.demands || []).map((d) => `<li>${esc(d)}</li>`).join('');
-    $('#campCard').querySelector('details').hidden = !(c.demands || []).length;
   }
 
   // ---------- splash ----------
   async function boot() {
     $('#soundBtn').setAttribute('aria-pressed', String(Sound.on));
     $('#soundBtn').setAttribute('aria-label', Sound.on ? 'Sound on' : 'Sound off');
+    try { renderCampaign(); } catch (e) { console.error('campaign', e); }
     try { S.cfg = await API.config(); } catch (e) { toast(e.message); S.cfg = null; }
     // A phone can keep an old cached copy of the page after an update. If the page is older than the
     // server, load the fresh page once (the guard stops a reload loop while a deploy is still rolling out).
@@ -178,7 +167,6 @@
     }
     const c = S.cfg || { title: 'Arivu Quiz', districts: [], areas: {}, totalQuestions: 10, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
     S.total = c.totalQuestions;
-    try { renderCampaign(); } catch (e) { console.error('campaign', e); }
     const opts = (c.districts || []).map((d) => `<option>${esc(d)}</option>`).join('');
     $('#regForm [name=district]').insertAdjacentHTML('beforeend', opts);
     $('#boardDistrict').insertAdjacentHTML('beforeend', opts);
@@ -302,9 +290,9 @@
   }
 
   async function bonusIntro() {
-    const ov = $('#levelUp'), l = $('#luLevel'), c = S.cfg?.campaign;
+    const ov = $('#levelUp'), l = $('#luLevel');
     l.textContent = 'Bonus'; l.className = 'lu-level bonus';
-    $('#luLine').textContent = `One more on the ${c?.name || 'campaign'}. No marks lost if wrong.`;
+    $('#luLine').textContent = `One more on the ${CAMPAIGN.name}. No marks lost if wrong.`;
     ov.hidden = false; Sound.fanfare();
     await wait(1700);
     ov.hidden = true;
@@ -535,8 +523,8 @@
   }
   async function share() {
     const r = S.result, c = S.cfg || {};
-    const w = campaignWhen(c.campaign);
-    const join = c.campaign && w && w.days >= 0 ? ` Know the facts and join the ${c.campaign.name} on ${w.short}!` : '';
+    const w = campaignWhen();
+    const join = w.days >= 0 ? ` Know the facts and join the ${CAMPAIGN.name} on ${w.short}!` : '';
     const text = r
       ? `I scored ${fmt(r.score)} in ${c.title || 'the quiz'} (${r.correct}/${r.total} right${r.overall.me ? `, #${r.overall.me.rank} in Kerala` : ''}). Can you beat me?${join}`
       : `Play ${c.title || 'the quiz'}!${join}`;

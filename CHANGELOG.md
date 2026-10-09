@@ -3,6 +3,13 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.11
+- Secretariat Valayal ticket and results card are fixed in the page and show at once with the rest of the opening screen; only the days-to-go countdown is worked out in the browser, with no wait for the database
+- Campaign fields removed from admin Settings
+
+## 1.6.10
+- Opening screen: "Kerala NGO Union" and "presents" on two lines, closer to the Arivu logotype
+
 ## 1.6.9
 - Opening screen tagline: "നമുക്ക് അറിവ് നേടാം. അധികാരികൾ തിരിച്ചറിവ് നേടട്ടെ.."
 - `wrangler.toml`: worker name is `ngouquiz`, matching the worker on Cloudflare (Workers Builds)
