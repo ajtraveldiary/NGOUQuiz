@@ -166,7 +166,6 @@ button { cursor: pointer; }
 .points-table .easy b { color: var(--leaf-deep); }
 .points-table .medium b { color: var(--brass-deep); }
 .points-table .hard b { color: var(--red); }
-.example { margin: 0; font-size: 14px; color: #6B4A45; background: #fff; border-radius: var(--r-sm); padding: 10px 12px; border: 1.5px dashed #E0C7B4; }
 
 /* ---------- quiz ---------- */
 .quiz { gap: 14px; padding-top: 14px; }

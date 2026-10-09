@@ -3,6 +3,9 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.6
+- How to play: the English "Example: …" box is removed
+
 ## 1.6.5
 - Game rules rewritten in short Malayalam (5 lines); the numbers still follow Settings
 - The negative-marks line is hidden when negative marking is off; the replay line follows "Attempts per player"

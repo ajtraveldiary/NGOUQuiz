@@ -264,8 +264,6 @@
     $('#pointsTable').innerHTML = ['easy', 'medium', 'hard'].filter((l) => (c.levels || { easy: 1, medium: 1, hard: 1 })[l] > 0)
       .map((l) => `<div class="${l}"><b>+${p[l]}</b><span>${LEVEL_NAME[l]}</span>${pen[l] ? `<small>−${pen[l]} if wrong</small>` : ''}</div>`).join('');
     $('#ruleNegative').hidden = !negative;
-    const left = Math.round(t * 0.6), speed = Math.round(p.medium * left / t);
-    $('#ruleExample').textContent = `Example: a medium question answered with ${left} of ${t} seconds left earns ${p.medium} + ${speed} speed bonus = ${p.medium + speed}. Get the next one right too and add a ${c.streakBonus ?? 25}-point streak bonus.`;
     show('rules');
   }
 
