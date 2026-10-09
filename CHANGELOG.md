@@ -3,6 +3,9 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.9
+- Opening screen tagline: "നമുക്ക് അറിവ് നേടാം. അധികാരികൾ തിരിച്ചറിവ് നേടട്ടെ.."
+
 ## 1.6.8
 - Opening screen: "Kerala NGO Union presents"
 - The opening screen's title, organisation line, tagline and values are fixed in the page; they no longer come from the database, and their fields are removed from admin Settings
