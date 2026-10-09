@@ -36,7 +36,7 @@ await Promise.all(Array.from({ length: N }, async (_, i) => {
   const st = s(await call('POST', '/api/game/start', { playerKey: reg.playerKey }, ip)).body;
   for (let k = 0; k < st.total; k++) {
     s(await call('POST', '/api/game/next', { playerKey: reg.playerKey, gameId: st.gameId }, ip));
-    s(await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st.gameId, index: k, choice: k % 3 === 0 ? 'skip' : k % 4 }, ip));
+    s(await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st.gameId, index: k, choice: k % 4 }, ip));
   }
   s(await call('POST', '/api/game/result', { playerKey: reg.playerKey, gameId: st.gameId }, ip));
 }));

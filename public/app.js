@@ -5,6 +5,7 @@
   const fmt = (n) => Number(n || 0).toLocaleString('en-IN');
   const secs = (ms) => (ms / 1000).toFixed(1).replace(/\.0$/, '') + 's';
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const SKIP_AFTER_MS = 5000; // same as the server
   // Light mode for weak phones: no endless animations and no confetti (see .lite in style.css).
   // Turned on up front from what the phone reports, or after a quick speed test once the page has loaded.
   let lite = reduceMotion || navigator.connection?.saveData === true
@@ -366,9 +367,10 @@
     box.innerHTML = q.options.map((o, i) =>
       `<button class="opt" type="button" data-i="${i}"><span class="key">${'ABCDEF'[i]}</span><span class="txt">${esc(o)}</span></button>`).join('');
     $('#feedback').hidden = true;
-    // Skip stays locked briefly so a tap meant for "Next question" can't land on it
-    const sk = $('#skipBtn'); sk.hidden = false; sk.disabled = true; disarmSkip();
-    clearTimeout(S.skipT); S.skipT = setTimeout(() => { if (!S.answered) sk.disabled = false; }, 1200);
+    // Skip opens 5 seconds into the question (counted from when it was first shown, so a reload doesn't reset it)
+    $('#skipBtn').hidden = false; disarmSkip();
+    S.skipAt = performance.now() + Math.max(0, SKIP_AFTER_MS - (q.limitMs - q.remainingMs));
+    updateSkip();
     startTimer(q.remainingMs, q.limitMs);
   }
 
@@ -393,6 +395,16 @@
       S.timer.t = setTimeout(tick, (left % 1000 || 1000) + 5);
     };
     tick();
+  }
+  // Locked with a countdown on the button until SKIP_AFTER_MS, then open
+  function updateSkip() {
+    const sk = $('#skipBtn');
+    clearTimeout(S.skipT);
+    if (S.answered || S.skipArmed) return;
+    const ms = S.skipAt - performance.now(), left = Math.ceil(ms / 1000);
+    sk.disabled = left > 0;
+    sk.innerHTML = left > 0 ? `Skip question <small>in ${left}s</small>` : 'Skip question <small>no marks lost</small>';
+    if (left > 0) S.skipT = setTimeout(updateSkip, (ms % 1000 || 1000) + 5);
   }
   // Skip needs two taps: the first arms it, the second (not a fast double-tap) skips
   function armSkip() {
@@ -423,7 +435,7 @@
       if (attempt < 2 && !e.status) { await wait(800 * (attempt + 1)); return submit(choice, attempt + 1); }
       toast(e.message + ' Tap your answer again.');
       S.answered = false; box.classList.remove('locked'); btns.forEach((b) => { b.disabled = false; b.classList.remove('chosen'); });
-      $('#skipBtn').disabled = false;
+      updateSkip();
       return;
     }
     reveal(choice, r, btns);
@@ -620,7 +632,7 @@
   });
   document.addEventListener('keydown', (e) => {
     if (!$('#screen-quiz').classList.contains('is-active') || S.answered) return;
-    if (e.key.toLowerCase() === 's') return submit('skip');
+    if (e.key.toLowerCase() === 's') return $('#skipBtn').disabled ? undefined : submit('skip');
     const i = 'abcdef'.indexOf(e.key.toLowerCase());
     if (i >= 0 && i < (S.q?.options.length || 0)) submit(i);
   });

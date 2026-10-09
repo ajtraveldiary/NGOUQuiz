@@ -161,7 +161,11 @@ console.log('✓ half-right game score', p3.res.score, 'rank', p3.res.overall.me
   const a1 = await ans(1, ((await peek(1)) + 1) % 4);            // wrong (easy): -25
   assert.equal(a1.wrong, true); assert.equal(a1.points, -25); assert.equal(a1.penalty, 25); assert.equal(a1.streak, 0);
   assert.equal(a1.score, a0.points - 25);
-  const a2 = await ans(2, 'skip');                               // skip: 0, no penalty
+  ok(await call('POST', '/api/game/next', { playerKey: reg.playerKey, gameId: st.gameId }), 'next4');
+  const early = await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st.gameId, index: 2, choice: 'skip' });
+  assert.equal(early.status, 400, 'no skip in the first 5 seconds');
+  await pg.query(`UPDATE games SET served_at = now() - interval '6 seconds' WHERE id = $1`, [st.gameId]);
+  const a2 = ok(await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st.gameId, index: 2, choice: 'skip' }), 'skip'); // skip: 0, no penalty
   assert.equal(a2.skipped, true); assert.equal(a2.points, 0); assert.equal(a2.score, a1.score); assert.equal(a2.timedOut, false);
   let last;
   for (let i = 3; i < st.total; i++) last = await ans(i, ((await peek(i)) + 1) % 4); // all wrong: score floors at 0
@@ -185,6 +189,7 @@ console.log('✓ half-right game score', p3.res.score, 'rank', p3.res.overall.me
   for (let i = 0; i < st2.total; i++) {
     const nx = ok(await call('POST', '/api/game/next', { playerKey: reg.playerKey, gameId: st2.gameId }), 'next4b');
     assert.equal(!!nx.bonus, i === st2.total - 1);
+    await pg.query(`UPDATE games SET served_at = now() - interval '6 seconds' WHERE id = $1`, [st2.gameId]);
     b = ok(await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st2.gameId, index: i, choice: i === st2.total - 1 ? await peek2(i) : 'skip' }), 'ans4b');
   }
   assert.equal(b.bonus, true); assert.equal(b.correct, true); assert.ok(b.points > 0); assert.equal(b.done, true);

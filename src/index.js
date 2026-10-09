@@ -57,6 +57,7 @@ export const DEFAULT_SETTINGS = {
 };
 
 const GRACE_MS = 400;          // network allowance subtracted from measured time
+const SKIP_AFTER_MS = 5000;    // Skip opens this long into a question (the game shows a countdown on the button)
 const LATE_MS = 1500;          // answers arriving later than limit + this count as timeouts
 const RESUME_WINDOW = '1 hour';
 
@@ -521,6 +522,8 @@ async function apiAnswer(env, req) {
 
   // choice: option index, 'skip' (no penalty), or null (time ran out, no penalty)
   const skipped = b.choice === 'skip';
+  // 1 s of slack for clock drift; the game itself never sends an early skip
+  if (skipped && (g.elapsed || 0) < SKIP_AFTER_MS - 1000) fail(400, 'Skip opens 5 seconds into the question.');
   const choice = skipped || b.choice === null || b.choice === undefined ? null : Number(b.choice);
   if (choice !== null && !(Number.isInteger(choice) && choice >= 0 && choice < order.length)) fail(400, 'Invalid option.');
   const elapsed = Math.max(0, (g.elapsed || 0) - GRACE_MS);
