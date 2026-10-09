@@ -3,6 +3,12 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 2.2.0 — Kerala colours
+- New colour theme for the game and the admin page: deep backwater teal background, kasavu gold for the main buttons, timer and score, handloom cream cards, paddy green for right answers and laterite red-brown for wrong ones; pale mint for secondary text. Replaces the maroon and red palette
+- The results badge, welcome line, avatar and rank number use teal and gold (red-brown now only means a wrong answer, a hard question or time running out)
+- Text and button colours meet the 4.5:1 contrast guideline (white on the right and wrong answer colours included)
+- Browser bar colour, favicon and confetti follow the new palette
+
 ## 2.1.0
 - All players registered before this version are deleted, with their games and answers; the leaderboard and play count start again from zero. A phone that still remembers a deleted player is asked to fill in a new player card
 - The admin page no longer has the Districts & areas tab; areas are gone from the database, the Insights page, the Players filter and every export. Players still choose a district
