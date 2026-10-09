@@ -28,7 +28,7 @@ scripts/           local server, API tests, demo build
 
 ## Deploy (about 15 minutes)
 
-1. **Neon**: create a project at neon.tech (choose region *AWS Asia Pacific (Singapore)* for Kerala). Open *SQL Editor* and run `db/schema.sql`, then `db/seed.sql`. Copy the connection string (Dashboard → Connect → "Pooled connection").
+1. **Neon**: create a project at neon.tech (choose region *AWS Asia Pacific (Singapore)* for Kerala). Copy the connection string (Dashboard → Connect → "Pooled connection"). The Worker creates the tables itself.
 2. **Cloudflare**:
    ```bash
    npm install
@@ -68,9 +68,13 @@ easy,Kerala,How many districts does Kerala have?,12,14,15,16,B,Kerala has 14 dis
 
 Use *Settings → Questions CSV* to download the current pool in the same format.
 
-## Upgrading an existing database
+## Database setup and upgrades are automatic
 
-If you already ran an earlier `db/schema.sql`, run the new `db/schema.sql` again in the Neon SQL Editor. It is safe to re-run: it adds the `areas` table and the players' `area` column, and moves players from "Thiruvananthapuram" to "Thiruvananthapuram North".
+On its first request the Worker creates any missing tables, upgrades older databases (adds areas, moves "Thiruvananthapuram" players to "Thiruvananthapuram North") and loads the 36 starter questions if the pool is empty. Running `db/schema.sql` by hand is optional.
+
+## Troubleshooting
+
+Open `https://<your-worker>/api/health`. It reports whether the database connects, the number of questions, players and areas, and whether `APP_SECRET` and `ADMIN_PASSWORD` are set. If something is wrong it says what to fix, for example a wrong `DATABASE_URL`.
 
 ## Before launch
 

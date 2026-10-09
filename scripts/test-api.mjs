@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 const root = new URL('..', import.meta.url).pathname;
 await build({
   entryPoints: [root + 'src/index.js'], bundle: true, format: 'esm', platform: 'neutral',
-  outfile: root + '.test-build/worker.mjs', loader: { '.html': 'text' }, logLevel: 'error',
+  outfile: root + '.test-build/worker.mjs', loader: { '.html': 'text', '.sql': 'text' }, logLevel: 'error',
   mainFields: ['module', 'main'], external: ['node:*'],
 });
 const worker = (await import(root + '.test-build/worker.mjs?' + Date.now())).default;
@@ -195,5 +195,35 @@ assert.ok((await call('GET', '/api/admin/export?type=players', undefined, A)).bo
 ok(await call('DELETE', '/api/admin/areas/' + kt.id, undefined, A), 'delete area');
 assert.ok(!ok(await call('GET', '/api/config'), 'cfg3').areas.Kollam.includes('Kottarakara'));
 console.log('✓ areas: rename updates players, filter, stats, export, delete');
+// ---- automatic database setup ----
+async function callEnv(e, method, path) {
+  const res = await worker.fetch(new Request('https://quiz.test' + path, { method }), e, {});
+  return { status: res.status, body: await res.json() };
+}
+// 1. brand-new empty database: tables and starter questions are created on first visit
+const fresh = new PGlite();
+const envFresh = { ...env, __db: { q: async (t, p = []) => (await fresh.query(t, p)).rows } };
+const c1 = await callEnv(envFresh, 'GET', '/api/config');
+assert.equal(c1.status, 200, JSON.stringify(c1.body));
+assert.equal(c1.body.totalQuestions, 10);
+const h1 = await callEnv(envFresh, 'GET', '/api/health');
+assert.equal(h1.body.ok, true); assert.equal(h1.body.activeQuestions, 36);
+await callEnv(envFresh, 'GET', '/api/health'); // re-running setup must not duplicate questions
+assert.equal((await fresh.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, 36);
+// 2. database made with the first version (no areas table, old district name) is upgraded
+const { execSync } = await import('node:child_process');
+const oldSchema = execSync('git show f765cbf:db/schema.sql', { cwd: root }).toString();
+const old = new PGlite();
+await old.exec(oldSchema);
+await old.query(`INSERT INTO players (name, office, district, phone) VALUES ('Old', 'X', 'Thiruvananthapuram', '9999999999')`);
+const envOld = { ...env, __db: { q: async (t, p = []) => (await old.query(t, p)).rows } };
+const c2 = await callEnv(envOld, 'GET', '/api/config');
+assert.equal(c2.status, 200, JSON.stringify(c2.body));
+assert.equal((await old.query('SELECT district FROM players')).rows[0].district, 'Thiruvananthapuram North');
+// 3. clear messages for configuration mistakes
+const noUrl = { APP_SECRET: env.APP_SECRET, ADMIN_PASSWORD: 'x' };
+assert.match((await callEnv(noUrl, 'GET', '/api/config')).body.error, /DATABASE_URL is not set/);
+assert.match((await callEnv({ ...noUrl, DATABASE_URL: 'mysql://x' }, 'GET', '/api/health')).body.error, /should start with postgresql/);
+console.log('✓ auto setup: empty database, old database upgrade, clear config errors');
 console.log('✓ admin: stats, question CRUD, import, players, void/restore, exports, settings');
 console.log('\nAll API tests passed.');

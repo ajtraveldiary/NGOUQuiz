@@ -7,10 +7,11 @@ compatibility_date = "2026-06-01"
 directory = "./public"
 binding = "ASSETS"
 
-# admin.html is bundled into the Worker, so it is never a public file
+# admin.html and db/schema.sql are bundled into the Worker (admin page is never a public file;
+# the schema lets the Worker create and upgrade its own tables)
 [[rules]]
 type = "Text"
-globs = ["**/*.html"]
+globs = ["**/*.html", "**/*.sql"]
 fallthrough = true
 
 [vars]

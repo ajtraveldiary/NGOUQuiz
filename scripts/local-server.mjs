@@ -9,12 +9,11 @@ import { extname, join, normalize } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 await build({
   entryPoints: [root + 'src/index.js'], bundle: true, format: 'esm', platform: 'neutral',
-  outfile: root + '.test-build/worker.mjs', loader: { '.html': 'text' }, logLevel: 'error', mainFields: ['module', 'main'],
+  outfile: root + '.test-build/worker.mjs', loader: { '.html': 'text', '.sql': 'text' }, logLevel: 'error', mainFields: ['module', 'main'],
 });
 const worker = (await import(root + '.test-build/worker.mjs?' + Date.now())).default;
 const pg = new PGlite();
-await pg.exec(readFileSync(root + 'db/schema.sql', 'utf8'));
-await pg.exec(readFileSync(root + 'db/seed.sql', 'utf8'));
+// tables and starter questions are created by the Worker on first request
 const env = {
   APP_SECRET: 'local-dev-secret-change-me-0123456789', ADMIN_PASSWORD: 'admin', ADMIN_PATH: 'union-control-room',
   __db: { q: async (t, p = []) => (await pg.query(t, p)).rows },

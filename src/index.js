@@ -2,6 +2,8 @@
 // Static game files are served from /public by Workers Static Assets.
 import { neon } from '@neondatabase/serverless';
 import ADMIN_HTML from './admin.html';
+import SCHEMA_SQL from '../db/schema.sql';
+import SEED_QUESTIONS from '../db/seed-questions.json';
 
 export const DISTRICTS = [
   'Thiruvananthapuram North', 'Thiruvananthapuram South', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam',
@@ -68,9 +70,59 @@ const csvCell = (v) => {
 
 function db(env) {
   if (env.__db) return env.__db; // test hook
-  if (!env.DATABASE_URL) fail(500, 'DATABASE_URL is not configured.');
-  const sql = neon(env.DATABASE_URL);
+  if (!env.DATABASE_URL) fail(500, 'DATABASE_URL is not set. Add it as a secret in the Cloudflare Worker settings.');
+  // Accept common paste mistakes: psql 'postgresql://…', quotes, DATABASE_URL=…
+  const url = String(env.DATABASE_URL).trim()
+    .replace(/^DATABASE_URL\s*=\s*/i, '').replace(/^psql\s+/i, '').replace(/^['"]|['"]$/g, '').trim();
+  if (!/^postgres(ql)?:\/\//i.test(url)) fail(500, 'DATABASE_URL looks wrong. It should start with postgresql:// (copy the connection string from Neon, not the psql command).');
+  const sql = neon(url);
   return { q: (text, params = []) => sql.query(text, params) };
+}
+
+// ---------- automatic database setup ----------
+// Creates missing tables, upgrades older databases and loads starter questions into an empty pool.
+// Runs once per Worker instance; afterwards it costs a single quick check.
+const SCHEMA_VERSION = 2;
+const schemaReady = new Map(); // per database
+function sqlStatements(text) {
+  return text.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
+    .split(/;\s*(?:\n|$)/).map((x) => x.trim()).filter(Boolean);
+}
+async function ensureSchema(env, d) {
+  const key = env.__db || env.DATABASE_URL;
+  if (!schemaReady.has(key)) {
+    schemaReady.set(key, (async () => {
+      try {
+        const r = await d.q(`SELECT value FROM settings WHERE key = 'schema_version'`);
+        if (Number(r[0]?.value) >= SCHEMA_VERSION) return;
+      } catch (e) {
+        if (!/does not exist/i.test(String(e?.message))) throw e;
+      }
+      for (const stmt of sqlStatements(SCHEMA_SQL)) await d.q(stmt);
+      const params = [];
+      const values = SEED_QUESTIONS.map((q) => {
+        params.push(q.question, JSON.stringify(q.options), q.correct, q.difficulty, q.category || null, q.explanation || null);
+        const n = params.length;
+        return `($${n - 5}, $${n - 4}::jsonb, $${n - 3}::smallint, $${n - 2}, $${n - 1}, $${n})`;
+      });
+      await d.q(
+        `INSERT INTO questions (question, options, correct_index, difficulty, category, explanation)
+         SELECT * FROM (VALUES ${values.join(',')}) v WHERE NOT EXISTS (SELECT 1 FROM questions)`, params);
+      await d.q(`INSERT INTO settings (key, value) VALUES ('schema_version', $1::jsonb)
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify(SCHEMA_VERSION)]);
+    })().catch((e) => { schemaReady.delete(key); throw e; }));
+  }
+  return schemaReady.get(key);
+}
+
+// Turns low-level database errors into a message the admin can act on (never includes the password)
+function explainDbError(e) {
+  const m = String(e?.message || e || '');
+  if (/password authentication failed|role .* does not exist/i.test(m)) return 'Database login failed. Copy the connection string from Neon again and update DATABASE_URL in Cloudflare.';
+  if (/database .* does not exist/i.test(m)) return 'The database named in DATABASE_URL does not exist. Copy the connection string from Neon again.';
+  if (/connection string|ENOTFOUND|getaddrinfo|fetch failed|Failed to fetch|network|endpoint .* (does not exist|is disabled)|could not translate host/i.test(m)) return 'Could not reach the Neon database. Check DATABASE_URL in Cloudflare and that the Neon project is active.';
+  if (/does not exist/i.test(m)) return 'The database tables are missing or out of date. Open /api/health once to set them up.';
+  return null;
 }
 function secret(env) {
   if (!env.APP_SECRET || env.APP_SECRET.length < 16) fail(500, 'APP_SECRET is not configured (min 16 chars).');
@@ -668,6 +720,28 @@ async function route(req, env) {
     });
   }
   if (!p.startsWith('/api/')) return null;
+  if (p === '/api/health' && m === 'GET') {
+    try {
+      const d = db(env);
+      schemaReady.delete(env.__db || env.DATABASE_URL); // always re-check on health
+      await ensureSchema(env, d);
+      const [r] = await d.q(`SELECT
+        (SELECT count(*)::int FROM questions WHERE active) AS questions,
+        (SELECT count(*)::int FROM players) AS players,
+        (SELECT count(*)::int FROM areas) AS areas`);
+      return json({
+        ok: true, database: 'connected', schemaVersion: SCHEMA_VERSION,
+        activeQuestions: r.questions, players: r.players, areas: r.areas,
+        appSecret: env.APP_SECRET && env.APP_SECRET.length >= 16 ? 'set' : 'MISSING (add APP_SECRET, 16+ characters)',
+        adminPassword: env.ADMIN_PASSWORD ? 'set' : 'MISSING (add ADMIN_PASSWORD)',
+      });
+    } catch (e) {
+      if (!(e instanceof HttpError)) console.error('health', e);
+      const msg = e instanceof HttpError ? e.message : explainDbError(e) || String(e?.message || e).slice(0, 300);
+      return json({ ok: false, error: msg }, 500);
+    }
+  }
+  await ensureSchema(env, db(env));
   if (m === 'POST' && !(req.headers.get('content-type') || '').includes('application/json')) fail(415, 'Send JSON.');
 
   if (p === '/api/config' && m === 'GET') return apiConfig(env);
@@ -721,7 +795,7 @@ export default {
     } catch (e) {
       if (e instanceof HttpError) return json({ error: e.message }, e.status);
       console.error(e);
-      return json({ error: 'Something went wrong on the server. Try again.' }, 500);
+      return json({ error: explainDbError(e) || 'Something went wrong on the server. Try again.' }, 500);
     }
   },
 };
