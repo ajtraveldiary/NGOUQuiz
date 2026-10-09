@@ -28,7 +28,7 @@
     return { top: all.slice(0, 10), me: all.find((x) => x.isMe) || null, total: all.length };
   }
   window.QUIZ_API = {
-    config: () => delay({ ...S, districts: DISTRICTS, areas: AREAS, levels: { easy: 4, medium: 4, hard: 2 }, totalQuestions: 10, maxAttempts: 0, open: true }),
+    config: () => delay({ ...S, version: typeof APP_VERSION === 'string' ? APP_VERSION : undefined, districts: DISTRICTS, areas: AREAS, levels: { easy: 4, medium: 4, hard: 2 }, totalQuestions: 10, maxAttempts: 0, open: true }),
     register: (p) => { me = { ...(me || {}), ...p }; return delay({ playerKey: 'demo', player: p, returning: false, played: 0, best: null }); },
     start: () => {
       const pick = (l, n) => shuffle(QUESTIONS.filter((q) => q.difficulty === l)).slice(0, n);

@@ -33,6 +33,7 @@ const ok = (r, label) => { if (r.status !== 200) { console.error(label, r); proc
 // config
 const cfg = ok(await call('GET', '/api/config'), 'config');
 assert.equal(cfg.totalQuestions, 10);
+assert.equal(cfg.version, JSON.parse(readFileSync(root + 'package.json', 'utf8')).version);
 assert.equal(cfg.districts.length, 15);
 assert.ok(cfg.districts.includes('Thiruvananthapuram North') && cfg.districts.includes('Thiruvananthapuram South'));
 assert.ok(!cfg.districts.includes('Thiruvananthapuram'));

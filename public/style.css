@@ -98,6 +98,7 @@ button { cursor: pointer; }
 .values li { padding: 3px 12px; border-radius: 999px; border: 1.5px solid rgba(242, 179, 61, .45); color: var(--mist); font-size: 14px; font-weight: 500; }
 .splash-stats { color: var(--mist); font-size: 15px; }
 .splash-stats b { color: var(--brass); font-family: var(--display); font-size: 22px; letter-spacing: .02em; }
+.ver { margin: 8px 0 0; font-size: 11px; color: var(--mist-2); opacity: .7; letter-spacing: .03em; }
 .splash-actions { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 16px; }
 
 /* ---------- headers & cards ---------- */

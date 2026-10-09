@@ -72,6 +72,10 @@ Use *Settings → Questions CSV* to download the current pool in the same format
 
 On its first request the Worker creates any missing tables, upgrades older databases (adds areas, moves "Thiruvananthapuram" players to "Thiruvananthapuram North") and loads the 36 starter questions if the pool is empty. Running `db/schema.sql` by hand is optional.
 
+## Version
+
+The version number shows in small text on the opening screen, in the admin header and at `/api/health`. It comes from `version` in `package.json`; see `CHANGELOG.md`.
+
 ## Troubleshooting
 
 Open `https://<your-worker>/api/health`. It reports whether the database connects, the number of questions, players and areas, and whether `APP_SECRET` and `ADMIN_PASSWORD` are set. If something is wrong it says what to fix, for example a wrong `DATABASE_URL`.

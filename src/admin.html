@@ -42,6 +42,7 @@ label > input, label > select, label > textarea { color: var(--ink); font-weight
 /* shell */
 header.top { background: var(--night); color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10; flex-wrap: wrap; }
 header.top h1 { margin: 0; font-family: var(--display); font-weight: 900; font-size: 26px; letter-spacing: .01em; }
+header.top h1 small.ver { opacity: .6; font-size: 11px; }
 header.top h1 small { font-family: var(--body); font-weight: 500; font-size: 13px; color: #E9BDB5; margin-left: 6px; letter-spacing: 0; }
 nav.tabs { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
 nav.tabs button { background: none; border: 0; color: #E9BDB5; padding: 6px 12px; border-radius: 999px; font-weight: 700; }
@@ -160,7 +161,7 @@ pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size:
 
 <div id="shell" hidden>
   <header class="top">
-    <h1>Control room<small id="liveTitle"></small></h1>
+    <h1>Control room<small id="liveTitle"></small><small class="ver">v{{VERSION}}</small></h1>
     <nav class="tabs" id="tabs">
       <button data-tab="insights" class="on">Insights</button>
       <button data-tab="questions">Questions</button>

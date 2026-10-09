@@ -144,6 +144,7 @@
     const opts = (c.districts || []).map((d) => `<option>${esc(d)}</option>`).join('');
     $('#regForm [name=district]').insertAdjacentHTML('beforeend', opts);
     $('#boardDistrict').insertAdjacentHTML('beforeend', opts);
+    if (c.version) $('#appVersion').textContent = 'v' + c.version;
     if (c.open === false) { $('#playBtn').disabled = true; $('#playBtn').textContent = 'Quiz is closed for now'; }
     renderSplashPlayer();
     API.board('', S.me?.playerKey).then((b) => {

@@ -4,6 +4,9 @@ import { neon } from '@neondatabase/serverless';
 import ADMIN_HTML from './admin.html';
 import SCHEMA_SQL from '../db/schema.sql';
 import SEED_QUESTIONS from '../db/seed-questions.json';
+import PKG from '../package.json';
+
+export const VERSION = PKG.version; // bump in package.json with every pushed change
 
 export const DISTRICTS = [
   'Thiruvananthapuram North', 'Thiruvananthapuram South', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam',
@@ -213,7 +216,7 @@ async function apiConfig(env) {
     districts: DISTRICTS, areas, levels: { easy: s.easy, medium: s.medium, hard: s.hard },
     totalQuestions: total || s.easy + s.medium + s.hard,
     timeLimitSec: s.timeLimitSec, points: s.points, streakBonus: s.streakBonus, streakCap: s.streakCap,
-    maxAttempts: s.maxAttempts, open: s.open,
+    maxAttempts: s.maxAttempts, open: s.open, version: VERSION,
   });
 }
 
@@ -712,7 +715,7 @@ async function route(req, env) {
   const adminPath = '/' + String(env.ADMIN_PATH || 'union-control-room').replace(/^\/+|\/+$/g, '');
 
   if (p === adminPath && m === 'GET') {
-    return new Response(ADMIN_HTML, {
+    return new Response(ADMIN_HTML.replaceAll('{{VERSION}}', VERSION), {
       headers: {
         'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store',
         'x-robots-tag': 'noindex, nofollow', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer',
@@ -730,7 +733,7 @@ async function route(req, env) {
         (SELECT count(*)::int FROM players) AS players,
         (SELECT count(*)::int FROM areas) AS areas`);
       return json({
-        ok: true, database: 'connected', schemaVersion: SCHEMA_VERSION,
+        ok: true, version: VERSION, database: 'connected', schemaVersion: SCHEMA_VERSION,
         activeQuestions: r.questions, players: r.players, areas: r.areas,
         appSecret: env.APP_SECRET && env.APP_SECRET.length >= 16 ? 'set' : 'MISSING (add APP_SECRET, 16+ characters)',
         adminPassword: env.ADMIN_PASSWORD ? 'set' : 'MISSING (add ADMIN_PASSWORD)',

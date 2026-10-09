@@ -18,7 +18,7 @@ html { background: var(--night); }
 </style>
 ${body.replace('<link rel="icon" href="/favicon.svg" type="image/svg+xml">', '')}
 <p class="demo-note">Demo with sample leaderboard players. Your scores stay on this device.</p>
-<script>const QUESTIONS = ${JSON.stringify(qs)};</script>
+<script>const QUESTIONS = ${JSON.stringify(qs)}; const APP_VERSION = ${JSON.stringify(JSON.parse(r('package.json')).version)};</script>
 <script>
 ${r('scripts/demo-api.js')}
 </script>
