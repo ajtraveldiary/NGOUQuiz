@@ -949,9 +949,10 @@ async function rateLimit(env, kind, key) {
   const k = `${kind}:${key}`;
   const tooMany = () => fail(429, 'Too many requests. Wait a minute and try again.', { 'retry-after': '60' });
   if (env[binding]?.limit) {
-    const { success } = await env[binding].limit({ key: k });
-    if (!success) tooMany();
-    return;
+    // If Cloudflare's rate-limit service itself errors, fall back to the counter below instead of failing the request
+    let res = null;
+    try { res = await env[binding].limit({ key: k }); } catch (e) { console.error('rate limit binding', binding, e); }
+    if (res) { if (!res.success) tooMany(); return; }
   }
   const w = Math.floor(Date.now() / 60_000);
   const h = hits.get(k);

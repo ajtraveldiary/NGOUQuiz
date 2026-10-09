@@ -3,6 +3,9 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.8.2
+- Fix: if Cloudflare's rate-limit service errors, the Worker falls back to its own counter instead of failing the request
+
 ## 1.8.1
 - Skip opens 5 seconds into each question; until then the button is locked and counts down ("Skip question in 4s"). The server refuses an earlier skip too, so a script can't skip through questions to collect the answers. Replaces the 1.2-second lock from 1.6.4
 
