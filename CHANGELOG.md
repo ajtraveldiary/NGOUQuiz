@@ -3,6 +3,11 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.9.0 — edit all questions in Excel
+- Admin → Questions: **Download Excel** (.xlsx with id, level, category, topic, bonus flag, question, options A–F, correct letter, explanation, active), made in the browser without any library
+- **Import Excel / CSV** reads .xlsx too. A row with an id updates that question; a row without an id updates the question with exactly the same text, or is added. Questions left out of the file are not touched (set active to "no" to hide one). The preview says how many will be updated and added, and the whole file is saved in one transaction (all or nothing). A question listed twice is refused
+- The questions CSV export now starts with the id column and writes active as yes/no
+
 ## 1.8.2
 - Fix: if Cloudflare's rate-limit service errors, the Worker falls back to its own counter instead of failing the request
 

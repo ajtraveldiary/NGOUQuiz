@@ -237,6 +237,31 @@ const imp = ok(await call('POST', '/api/admin/questions/import', { questions: [
   { question: 'Q2', options: ['a', 'b'], correct: 0, difficulty: 'hard', explanation: 'because' },
 ] }, A), 'import');
 assert.equal(imp.imported, 2);
+// Edit-and-reimport: id updates that question, same text updates by text, active = no hides, new rows are added
+{
+  const all = ok(await call('GET', '/api/admin/questions', undefined, A), 'qs').questions;
+  const [q1, q2] = all.filter((q) => q.active);
+  const before = all.length;
+  const r = ok(await call('POST', '/api/admin/questions/import', { questions: [
+    { id: String(q1.id), question: q1.question + ' (edited)', options: ['x', 'y', 'z'], correct: 2, difficulty: 'hard', category: 'Edited', active: 'yes' },
+    { id: '', question: q2.question, options: q2.options, correct: q2.correct_index, difficulty: q2.difficulty, explanation: 'new note', active: 'no' },
+    { question: 'Brand-new imported question?', options: ['a', 'b'], correct: 1, difficulty: 'easy', active: 'yes' },
+  ] }, A), 'reimport');
+  assert.deepEqual([r.updated, r.added], [2, 1]);
+  const after = ok(await call('GET', '/api/admin/questions', undefined, A), 'qs2').questions;
+  assert.equal(after.length, before + 1, 'no duplicates');
+  const e1 = after.find((q) => q.id === q1.id), e2 = after.find((q) => q.id === q2.id);
+  assert.equal(e1.question, q1.question + ' (edited)'); assert.deepEqual(e1.options, ['x', 'y', 'z']); assert.equal(e1.correct_index, 2); assert.equal(e1.difficulty, 'hard');
+  assert.equal(e2.active, false); assert.equal(e2.explanation, 'new note');
+  const dup = await call('POST', '/api/admin/questions/import', { questions: [
+    { id: String(q1.id), question: 'a?', options: ['a', 'b'], correct: 0, difficulty: 'easy' },
+    { id: String(q1.id), question: 'b?', options: ['a', 'b'], correct: 0, difficulty: 'easy' },
+  ] }, A);
+  assert.equal(dup.status, 400, 'the same question twice is refused');
+  assert.equal(ok(await call('GET', '/api/admin/questions', undefined, A), 'qs3').questions.find((q) => q.id === q1.id).question, q1.question + ' (edited)', 'a refused file changes nothing');
+  const csvQ = await call('GET', '/api/admin/export?type=questions', undefined, A);
+  assert.ok(csvQ.body.startsWith('\ufeffid,difficulty') || csvQ.body.startsWith('id,difficulty'), 'question export starts with id');
+}
 const players = ok(await call('GET', '/api/admin/players?q=biju', undefined, A), 'players');
 assert.equal(players.total, 1);
 const detail = ok(await call('GET', '/api/admin/players/' + players.players[0].id, undefined, A), 'player');

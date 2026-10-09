@@ -198,7 +198,8 @@ pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size:
         <select id="qActive"><option value="">Active and hidden</option><option value="1">Active only</option><option value="0">Hidden only</option></select>
         <select id="qKind"><option value="">All questions</option><option value="regular">Regular</option><option value="bonus">Bonus (campaign)</option></select>
         <span class="grow legend" id="qCount"></span>
-        <button class="btn ghost" id="importBtn">Import CSV</button>
+        <button class="btn ghost" id="exportXlsx">Download Excel</button>
+        <button class="btn ghost" id="importBtn">Import Excel / CSV</button>
         <button class="btn brass" id="addQ">Add question</button>
       </div>
       <div class="qlist" id="qList"></div>
@@ -263,7 +264,7 @@ pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size:
       </form>
       <div class="panel" style="max-width:720px;margin-top:14px">
         <h3>Backup</h3>
-        <p class="hint">Download the full question pool as CSV. The same format works for Import CSV.</p>
+        <p class="hint">Download the full question pool as CSV. For editing, use <b>Download Excel</b> on the Questions page; both formats work for import.</p>
         <div class="foot" style="justify-content:flex-start;margin-top:8px"><button class="btn ghost" data-export="questions">Questions CSV</button></div>
       </div>
     </section>
@@ -300,10 +301,11 @@ pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size:
 <div class="modal" id="impModal" hidden>
   <div class="box">
     <h2 style="margin:0">Import questions</h2>
-    <p class="hint">Upload a CSV with a header row. Columns: <b>difficulty</b> (easy / medium / hard), <b>category</b>, <b>topic</b> (optional tag), <b>campaign</b> (yes = bonus question about the campaign), <b>question</b>, <b>option_a</b> to <b>option_f</b> (at least two), <b>correct</b> (letter A–F), <b>explanation</b>. Malayalam text works; save the file as CSV UTF-8.</p>
+    <p class="hint">Easiest: <b>Download Excel</b>, edit it, and upload it here. Rows keep their <b>id</b>, so they update the same questions; rows without an id are added (or update the question with exactly the same text). Questions you delete from the file are not removed: set <b>active</b> to <i>no</i> to hide one.</p>
+    <p class="hint">Columns: <b>id</b>, <b>difficulty</b> (easy / medium / hard), <b>category</b>, <b>topic</b> (optional tag), <b>campaign</b> (yes = bonus question about the campaign), <b>question</b>, <b>option_a</b> to <b>option_f</b> (at least two), <b>correct</b> (letter A–F), <b>explanation</b>, <b>active</b> (yes / no). Excel (.xlsx) or CSV UTF-8. Malayalam text works.</p>
     <pre class="sample">difficulty,category,topic,question,option_a,option_b,option_c,option_d,correct,explanation
 easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബല്യത്തിൽ വന്നത് ഏത് തീയതി മുതൽ?,01-01-2013,01-04-2013,01-07-2013,01-01-2014,B,01-04-2013 മുതൽ.</pre>
-    <input type="file" id="impFile" accept=".csv,text/csv">
+    <input type="file" id="impFile" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
     <p class="err" id="impErr"></p>
     <div id="impPreview" class="hint"></div>
     <div class="foot"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn brass" id="impGo" disabled>Import</button></div>
@@ -541,7 +543,98 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     } catch (ex) { $('#qErr').textContent = ex.message; }
   });
 
-  // CSV import
+  // ---------- Excel (.xlsx) without a library: a stored ZIP of a few XML files, read back with the browser's inflate ----------
+  const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = (u8) => { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  function zipStored(files) {
+    const te = new TextEncoder(), parts = [], central = []; let off = 0;
+    for (const f of files) {
+      const name = te.encode(f.name), data = te.encode(f.text), crc = crc32(data), n = data.length;
+      const h = new DataView(new ArrayBuffer(30));
+      [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [12, 0x21, 2], [14, crc, 4], [18, n, 4], [22, n, 4], [26, name.length, 2]]
+        .forEach(([o, v, s]) => (s === 4 ? h.setUint32(o, v, true) : h.setUint16(o, v, true)));
+      const c = new DataView(new ArrayBuffer(46));
+      [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [14, 0x21, 2], [16, crc, 4], [20, n, 4], [24, n, 4], [28, name.length, 2], [42, off, 4]]
+        .forEach(([o, v, s]) => (s === 4 ? c.setUint32(o, v, true) : c.setUint16(o, v, true)));
+      parts.push(new Uint8Array(h.buffer), name, data); central.push(new Uint8Array(c.buffer), name);
+      off += 30 + name.length + n;
+    }
+    const size = central.reduce((t, p) => t + p.length, 0), e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, size, true); e.setUint32(16, off, true);
+    return new Blob([...parts, ...central, new Uint8Array(e.buffer)], { type: XLSX_TYPE });
+  }
+  const colName = (i) => { let s = ''; for (i++; i; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s; return s; };
+  const colIndex = (ref) => [...ref.replace(/\d+$/, '')].reduce((t, ch) => t * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+  function makeXlsx(sheetName, rows, widths) {
+    const x = (s) => String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main', R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const data = rows.map((r, ri) => `<row r="${ri + 1}">` + r.map((v, ci) => {
+      if (v === '' || v == null) return '';
+      const at = `r="${colName(ci)}${ri + 1}"${ri === 0 ? ' s="1"' : ' s="2"'}`;
+      return typeof v === 'number' ? `<c ${at}><v>${v}</v></c>` : `<c ${at} t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`;
+    }).join('') + '</row>').join('');
+    const lastCol = colName(rows[0].length - 1), last = lastCol + rows.length;
+    const head = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+    return zipStored([
+      { name: '[Content_Types].xml', text: `${head}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>` },
+      { name: '_rels/.rels', text: `${head}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/officeDocument" Target="xl/workbook.xml"/></Relationships>` },
+      { name: 'xl/workbook.xml', text: `${head}<workbook xmlns="${NS}" xmlns:r="${R}"><sheets><sheet name="${x(sheetName)}" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${x(sheetName)}'!\$A\$1:\$${lastCol}\$${rows.length}</definedName></definedNames></workbook>` },
+      { name: 'xl/_rels/workbook.xml.rels', text: `${head}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="${R}/styles" Target="styles.xml"/></Relationships>` },
+      { name: 'xl/styles.xml', text: `${head}<styleSheet xmlns="${NS}"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF2E3C6"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>` },
+      { name: 'xl/worksheets/sheet1.xml', text: `${head}<worksheet xmlns="${NS}"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${data}</sheetData><autoFilter ref="A1:${last}"/></worksheet>` },
+    ]);
+  }
+  async function readXlsx(buf) {
+    const u8 = new Uint8Array(buf), dv = new DataView(buf), dec = new TextDecoder();
+    let e = u8.length - 22; while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+    if (e < 0) throw new Error('This file is not an Excel (.xlsx) file.');
+    const files = {}; let p = dv.getUint32(e + 16, true);
+    for (let i = 0, n = dv.getUint16(e + 10, true); i < n; i++) {
+      const nlen = dv.getUint16(p + 28, true);
+      files[dec.decode(u8.subarray(p + 46, p + 46 + nlen))] = { method: dv.getUint16(p + 10, true), size: dv.getUint32(p + 20, true), at: dv.getUint32(p + 42, true) };
+      p += 46 + nlen + dv.getUint16(p + 30, true) + dv.getUint16(p + 32, true);
+    }
+    const read = async (name) => {
+      const f = files[name]; if (!f) return null;
+      const s = f.at + 30 + dv.getUint16(f.at + 26, true) + dv.getUint16(f.at + 28, true), data = u8.slice(s, s + f.size);
+      if (f.method === 0) return dec.decode(data);
+      return new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+    };
+    const xml = (s) => new DOMParser().parseFromString(s, 'application/xml');
+    const texts = (el) => [...el.getElementsByTagName('t')].filter((t) => t.parentNode.nodeName !== 'rPh').map((t) => t.textContent).join('');
+    const wb = xml(await read('xl/workbook.xml')), rels = xml(await read('xl/_rels/workbook.xml.rels'));
+    const rid = wb.getElementsByTagName('sheet')[0].getAttribute('r:id');
+    const target = [...rels.getElementsByTagName('Relationship')].find((r) => r.getAttribute('Id') === rid).getAttribute('Target');
+    const shared = await read('xl/sharedStrings.xml');
+    const ss = shared ? [...xml(shared).getElementsByTagName('si')].map(texts) : [];
+    const sheet = xml(await read(target.startsWith('/') ? target.slice(1) : 'xl/' + target.replace(/^\.\//, '')));
+    const rows = [];
+    for (const r of sheet.getElementsByTagName('row')) {
+      const row = [];
+      for (const c of r.getElementsByTagName('c')) {
+        const t = c.getAttribute('t'), v = c.getElementsByTagName('v')[0]?.textContent ?? '';
+        row[c.getAttribute('r') ? colIndex(c.getAttribute('r')) : row.length] = t === 's' ? ss[Number(v)] ?? '' : t === 'inlineStr' ? texts(c) : v;
+      }
+      rows[(Number(r.getAttribute('r')) || rows.length + 1) - 1] = Array.from(row, (x) => x ?? '');
+    }
+    return Array.from(rows, (r) => r || []).filter((r) => r.some((x) => String(x).trim()));
+  }
+  const QCOLS = ['id', 'difficulty', 'category', 'topic', 'campaign', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'option_f', 'correct', 'explanation', 'active'];
+  $('#exportXlsx').addEventListener('click', async () => {
+    try {
+      const list = (await api('GET', 'questions')).questions.slice().sort((a, b) => a.id - b.id);
+      const rows = [QCOLS, ...list.map((q) => [q.id, q.difficulty, q.category || '', q.topic || '', q.campaign ? 'yes' : '', q.question,
+        ...[...q.options, '', '', '', '', '', ''].slice(0, 6), 'ABCDEF'[q.correct_index], q.explanation || '', q.active ? 'yes' : 'no'])];
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(makeXlsx('Questions', rows, [7, 10, 18, 16, 10, 60, 30, 30, 30, 30, 20, 20, 9, 50, 8]));
+      a.download = `quiz-questions-${new Date().toISOString().slice(0, 10)}.xlsx`; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      toast(`Downloaded ${list.length} questions`);
+    } catch (ex) { toast(ex.message); }
+  });
+
+  // Excel / CSV import
   function parseCSV(text) {
     const rows = []; let row = [], cell = '', q = false;
     text = text.replace(/^﻿/, '');
@@ -561,7 +654,11 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
   $('#impFile').addEventListener('change', async (e) => {
     $('#impErr').textContent = ''; pending = []; $('#impGo').disabled = true;
     const file = e.target.files[0]; if (!file) return;
-    const rows = parseCSV(await file.text());
+    let rows;
+    try {
+      const buf = await file.arrayBuffer();
+      rows = new Uint8Array(buf, 0, 2).join() === '80,75' ? await readXlsx(buf) : parseCSV(new TextDecoder().decode(buf));
+    } catch (ex) { $('#impErr').textContent = ex.message || 'Could not read this file.'; return; }
     if (rows.length < 2) { $('#impErr').textContent = 'The file has no question rows.'; return; }
     const head = rows[0].map((h) => h.trim().toLowerCase());
     const col = (n) => head.indexOf(n);
@@ -574,18 +671,21 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
       const ci = /^[A-F]$/.test(c) ? c.charCodeAt(0) - 65 : (/^\d$/.test(c) ? Number(c) - 1 : -1);
       const d = (r[col('difficulty')] || '').trim().toLowerCase();
       if (!r[col('question')]?.trim() || opts.length < 2 || ci < 0 || ci >= opts.length || !['easy', 'medium', 'hard'].includes(d)) { problems.push(n + 2); return; }
-      pending.push({ question: r[col('question')].trim(), options: opts, correct: ci, difficulty: d,
-        category: col('category') >= 0 ? r[col('category')] : '', topic: col('topic') >= 0 ? r[col('topic')] : '', campaign: col('campaign') >= 0 ? r[col('campaign')] : '', explanation: col('explanation') >= 0 ? r[col('explanation')] : '' });
+      const cell = (n) => (col(n) >= 0 ? String(r[col(n)] ?? '').trim() : '');
+      pending.push({ id: cell('id'), question: String(r[col('question')]).trim(), options: opts, correct: ci, difficulty: d,
+        category: cell('category'), topic: cell('topic'), campaign: cell('campaign'), explanation: cell('explanation'), active: cell('active') || 'yes' });
     });
     const by = ['easy', 'medium', 'hard'].map((l) => `${pending.filter((p) => p.difficulty === l).length} ${l}`).join(', ');
-    $('#impPreview').innerHTML = `Ready to import <b>${pending.length}</b> questions (${by}).` + (problems.length ? `<br>Skipping rows ${problems.slice(0, 15).join(', ')}${problems.length > 15 ? '…' : ''}: missing question, options, level or a valid answer letter.` : '');
+    const known = new Set(questions.map((q) => String(q.id))), texts = new Set(questions.map((q) => q.question.trim()));
+    const upd = pending.filter((p) => known.has(p.id) || texts.has(p.question)).length;
+    $('#impPreview').innerHTML = `Ready: <b>${pending.length}</b> questions (${by}). <b>${upd}</b> will update existing questions, <b>${pending.length - upd}</b> will be added.` + (problems.length ? `<br>Skipping rows ${problems.slice(0, 15).join(', ')}${problems.length > 15 ? '…' : ''}: missing question, options, level or a valid answer letter.` : '');
     $('#impGo').disabled = !pending.length;
   });
   $('#impGo').addEventListener('click', async () => {
     try {
       $('#impGo').disabled = true;
       const r = await api('POST', 'questions/import', { questions: pending });
-      $('#impModal').hidden = true; toast(`Imported ${r.imported} questions`); await loadQuestions();
+      $('#impModal').hidden = true; toast(`${r.updated} questions updated, ${r.added} added`); await loadQuestions();
     } catch (ex) { $('#impErr').textContent = ex.message; $('#impGo').disabled = false; }
   });
 
