@@ -77,9 +77,11 @@ button { cursor: pointer; }
 
 /* ---------- splash ---------- */
 .splash { justify-content: center; text-align: center; gap: 14px; padding-top: 40px; }
-.flagpole { width: 170px; height: 110px; margin: 0 auto 6px; position: relative; }
-.flagpole::before { content: ''; position: absolute; left: 0; top: 0; bottom: -40px; width: 5px; border-radius: 3px; background: var(--brass); }
-.flag { position: absolute; left: 5px; top: 4px; width: 160px; height: 96px; transform-origin: left center; animation: wave 2.6s ease-in-out infinite; }
+.flagpole { width: 210px; height: 136px; margin: 0 auto 6px; position: relative; }
+.flagpole::before { content: ''; position: absolute; left: 0; top: 0; bottom: -40px; width: 6px; border-radius: 3px; background: var(--brass); }
+.flag { position: absolute; left: 6px; top: 4px; width: 200px; height: 124px; transform-origin: left center; animation: wave 2.6s ease-in-out infinite; }
+.flag svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.flag-logo { position: absolute; left: 50%; top: 50%; height: 78%; width: auto; transform: translate(-50%, -50%); }
 .flag-cloth { fill: var(--red); filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .35)); }
 @keyframes wave { 50% { transform: skewY(-3deg) scaleX(.95); } }
 .org { margin: 18px 0 0; color: var(--mist); font-weight: 600; font-size: 15px; }

@@ -3,6 +3,9 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.4.1
+- Kerala NGO Union torch emblem on the waving flag on the opening screen (`public/logo.png`)
+
 ## 1.4.0
 - Negative marking: a wrong answer loses marks (easy 25, medium 40, hard 50; editable in admin Settings, 0 turns it off). A game score never goes below 0
 - Skip button at the bottom of each question: no marks lost, the right answer is shown

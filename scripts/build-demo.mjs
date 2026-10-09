@@ -16,7 +16,8 @@ html { background: var(--night); }
 .demo-note { position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; text-align: center; font-size: 12px; padding: 4px 12px calc(4px + env(safe-area-inset-bottom, 0px)); background: rgba(43, 7, 16, .9); color: var(--mist-2); }
 .screen { padding-bottom: calc(44px + var(--safe-b)); }
 </style>
-${body.replace('<link rel="icon" href="/favicon.svg" type="image/svg+xml">', '')}
+${body.replace('<link rel="icon" href="/favicon.svg" type="image/svg+xml">', '')
+  .replace('src="/logo.png"', `src="data:image/png;base64,${readFileSync(new URL('../public/logo.png', import.meta.url)).toString('base64')}"`)}
 <p class="demo-note">Demo with sample leaderboard players. Your scores stay on this device.</p>
 <script>const QUESTIONS = ${JSON.stringify(qs)}; const APP_VERSION = ${JSON.stringify(JSON.parse(r('package.json')).version)};</script>
 <script>
