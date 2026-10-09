@@ -33,7 +33,22 @@ const ok = (r, label) => { if (r.status !== 200) { console.error(label, r); proc
 // config
 const cfg = ok(await call('GET', '/api/config'), 'config');
 assert.equal(cfg.totalQuestions, 10);
-assert.equal(cfg.districts.length, 14);
+assert.equal(cfg.districts.length, 15);
+assert.ok(cfg.districts.includes('Thiruvananthapuram North') && cfg.districts.includes('Thiruvananthapuram South'));
+assert.ok(!cfg.districts.includes('Thiruvananthapuram'));
+
+// areas: admin adds areas for Kollam; registration in Kollam then requires one
+const { token: tok0 } = ok(await call('POST', '/api/admin/login', { password: 'pass123' }), 'early login');
+const A0 = { authorization: 'Bearer ' + tok0 };
+assert.deepEqual(ok(await call('POST', '/api/admin/areas', { district: 'Kollam', names: ['Kottarakkara', 'Kollam Town', 'Kottarakkara', ' '] }, A0), 'add areas'), { added: 2, skipped: 0 });
+assert.deepEqual(ok(await call('POST', '/api/admin/areas', { district: 'Kollam', names: ['Kollam Town', 'Punalur'] }, A0), 'add more'), { added: 1, skipped: 1 });
+assert.equal((await call('POST', '/api/admin/areas', { district: 'Nowhere', names: ['x'] }, A0)).status, 400);
+const cfgA = ok(await call('GET', '/api/config'), 'config areas');
+assert.deepEqual(cfgA.areas.Kollam, ['Kollam Town', 'Kottarakkara', 'Punalur']);
+assert.deepEqual(cfgA.areas.Kottayam, []);
+assert.equal((await call('POST', '/api/register', { name: 'Biju', office: 'X', district: 'Kollam', phone: '9123456780' })).status, 400);
+assert.equal((await call('POST', '/api/register', { name: 'Biju', office: 'X', district: 'Kollam', area: 'Mars', phone: '9123456780' })).status, 400);
+console.log('✓ 15 districts, areas required where configured');
 
 // validation
 assert.equal((await call('POST', '/api/register', { name: 'A', office: 'X', district: 'Kollam', phone: '123' })).status, 400);
@@ -72,7 +87,7 @@ async function cheatCorrect(i, q, key, gameId) {
   const qq = (await pg.query('SELECT correct_index FROM questions WHERE id = $1', [g.question_ids[i]])).rows[0];
   return g.option_orders[i].indexOf(qq.correct_index);
 }
-const p1 = await playGame({ name: 'Anu Mohan', office: 'DHS Thiruvananthapuram', district: 'Thiruvananthapuram', phone: '+91 98765 43210' }, cheatCorrect);
+const p1 = await playGame({ name: 'Anu Mohan', office: 'DHS Thiruvananthapuram', district: 'Thiruvananthapuram North', phone: '+91 98765 43210' }, cheatCorrect);
 assert.deepEqual(p1.levels, ['easy', 'easy', 'easy', 'easy', 'medium', 'medium', 'medium', 'medium', 'hard', 'hard']);
 assert.equal(p1.res.correct, 10);
 assert.equal(p1.res.bestStreak, 10);
@@ -84,7 +99,7 @@ assert.equal(p1.res.score, expected, `score ${p1.res.score} vs ${expected}`);
 console.log('✓ perfect game score', p1.res.score);
 
 // Player 2: wrong on everything, plus a timeout on Q1
-const p2 = await playGame({ name: 'Biju K', office: 'Taluk Hospital', district: 'Kollam', phone: '9123456789' }, async (i, q, key, gameId) => {
+const p2 = await playGame({ name: 'Biju K', office: 'Taluk Hospital', district: 'Kollam', area: 'Kottarakkara', phone: '9123456789' }, async (i, q, key, gameId) => {
   if (i === 0) { await pg.query(`UPDATE games SET served_at = now() - interval '30 seconds' WHERE id = $1`, [gameId]); return 1; }
   const right = await cheatCorrect(i, q, key, gameId);
   return (right + 1) % q.options.length;
@@ -106,7 +121,7 @@ assert.equal(p3.res.overall.total, 3);
 console.log('✓ half-right game score', p3.res.score, 'rank', p3.res.overall.me.rank);
 
 // Same phone registers again → same player, replay; best score counts once on board
-const again = await playGame({ name: 'Biju K', office: 'Taluk Hospital', district: 'Kollam', phone: '09123456789' }, cheatCorrect);
+const again = await playGame({ name: 'Biju K', office: 'Taluk Hospital', district: 'Kollam', area: 'Kottarakkara', phone: '09123456789' }, cheatCorrect);
 assert.equal(again.res.overall.total, 3);
 assert.ok(again.res.personalBest);
 console.log('✓ replay keeps one board entry; Biju now rank', again.res.overall.me.rank);
@@ -119,6 +134,7 @@ assert.equal((await call('POST', '/api/game/next', { playerKey: p3.key, gameId: 
 // Public leaderboard
 const lb = ok(await call('GET', '/api/leaderboard?district=Kollam&key=' + encodeURIComponent(p2.key)), 'board');
 assert.equal(lb.top[0].isMe, true);
+assert.equal(lb.top[0].area, 'Kottarakkara');
 assert.ok(!('phone' in lb.top[0]), 'phone must not be public');
 
 // Admin
@@ -168,5 +184,16 @@ assert.equal((await call('POST', '/api/game/start', { playerKey: p2.key })).stat
 ok(await call('PUT', '/api/admin/settings', { open: false, maxAttempts: 0 }, A), 'close');
 assert.equal((await call('POST', '/api/game/start', { playerKey: p3.key })).status, 403);
 
+const ar = ok(await call('GET', '/api/admin/areas', undefined, A), 'areas list');
+const kt = ar.areas.find((a) => a.name === 'Kottarakkara');
+assert.equal(kt.players, 1);
+assert.equal((await call('PUT', '/api/admin/areas/' + kt.id, { name: 'Kollam Town' }, A)).status, 409);
+assert.equal(ok(await call('PUT', '/api/admin/areas/' + kt.id, { name: 'Kottarakara' }, A), 'rename').playersUpdated, 1);
+assert.equal(ok(await call('GET', '/api/admin/players?district=Kollam&area=Kottarakara', undefined, A), 'by area').total, 1);
+assert.ok(ok(await call('GET', '/api/admin/stats', undefined, A), 'stats2').byArea.some((x) => x.area === 'Kottarakara'));
+assert.ok((await call('GET', '/api/admin/export?type=players', undefined, A)).body.includes('Kottarakara'));
+ok(await call('DELETE', '/api/admin/areas/' + kt.id, undefined, A), 'delete area');
+assert.ok(!ok(await call('GET', '/api/config'), 'cfg3').areas.Kollam.includes('Kottarakara'));
+console.log('✓ areas: rename updates players, filter, stats, export, delete');
 console.log('✓ admin: stats, question CRUD, import, players, void/restore, exports, settings');
 console.log('\nAll API tests passed.');

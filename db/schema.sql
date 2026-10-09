@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS players (
   name        TEXT NOT NULL,
   office      TEXT NOT NULL,
   district    TEXT NOT NULL,
+  area        TEXT,                          -- union area within the district (optional)
   phone       TEXT NOT NULL UNIQUE,          -- 10-digit Indian mobile, digits only
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -63,3 +64,17 @@ CREATE TABLE IF NOT EXISTS settings (
   key    TEXT PRIMARY KEY,
   value  JSONB NOT NULL
 );
+
+-- Union areas under each district (managed from the admin page)
+CREATE TABLE IF NOT EXISTS areas (
+  id          SERIAL PRIMARY KEY,
+  district    TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (district, name)
+);
+
+-- ---- Upgrades for databases created with an earlier version (safe to re-run) ----
+ALTER TABLE players ADD COLUMN IF NOT EXISTS area TEXT;
+-- Thiruvananthapuram is now two union districts: North and South
+UPDATE players SET district = 'Thiruvananthapuram North' WHERE district = 'Thiruvananthapuram';

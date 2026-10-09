@@ -131,7 +131,7 @@
     $('#soundBtn').setAttribute('aria-pressed', String(Sound.on));
     $('#soundBtn').setAttribute('aria-label', Sound.on ? 'Sound on' : 'Sound off');
     try { S.cfg = await API.config(); } catch (e) { toast(e.message); S.cfg = null; }
-    const c = S.cfg || { title: 'Arivu Quiz', values: [], districts: [], totalQuestions: 10, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
+    const c = S.cfg || { title: 'Arivu Quiz', values: [], districts: [], areas: {}, totalQuestions: 10, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
     S.total = c.totalQuestions;
     const words = String(c.title).trim().split(/\s+/);
     const first = words.length > 1 ? words.slice(0, Math.ceil(words.length / 2)).join(' ') : words[0];
@@ -163,9 +163,17 @@
   function openRegister() {
     const f = $('#regForm'), p = S.me?.player || {};
     f.name.value = p.name || ''; f.office.value = p.office || ''; f.district.value = p.district || ''; f.phone.value = p.phone || '';
+    fillAreas(f.district.value, p.area || '');
     updateAvatar(); $('#regError').textContent = '';
     show('register');
     setTimeout(() => (p.name ? null : f.name.focus()), 350);
+  }
+  function fillAreas(district, selected) {
+    const list = (S.cfg?.areas || {})[district] || [];
+    const sel = $('#regForm').area;
+    sel.innerHTML = '<option value="">Choose your area</option>' + list.map((a) => `<option>${esc(a)}</option>`).join('');
+    sel.value = list.includes(selected) ? selected : '';
+    $('#areaField').hidden = !list.length;
   }
   function updateAvatar() {
     const v = $('#regForm').name.value.trim(), a = $('#avatar'), ch = v ? v[0].toUpperCase() : '?';
@@ -175,11 +183,12 @@
     e.preventDefault();
     const f = e.target, err = $('#regError');
     f.querySelectorAll('.invalid').forEach((x) => x.classList.remove('invalid'));
-    const data = { name: f.name.value.trim(), office: f.office.value.trim(), district: f.district.value, phone: f.phone.value.replace(/\D/g, '') };
+    const data = { name: f.name.value.trim(), office: f.office.value.trim(), district: f.district.value, area: f.area.value, phone: f.phone.value.replace(/\D/g, '') };
     const bad = (el, msg) => { el.classList.add('invalid'); el.focus(); err.textContent = msg; buzz(60); };
     if (data.name.length < 2) return bad(f.name, 'Enter your name.');
     if (data.office.length < 2) return bad(f.office, 'Enter your office.');
     if (!data.district) return bad(f.district, 'Choose your district.');
+    if (!$('#areaField').hidden && !data.area) return bad(f.area, 'Choose your area.');
     if (!/^[6-9]\d{9}$/.test(data.phone)) return bad(f.phone, 'Enter a valid 10-digit mobile number.');
     err.textContent = '';
     const btn = $('#regSubmit'); btn.disabled = true; btn.textContent = 'Saving…';
@@ -409,7 +418,7 @@
   }
   function renderBoard(el, b, showDistrict) {
     if (!b || !b.top.length) { el.innerHTML = '<p class="empty">No scores yet. Be the first on the board.</p>'; return; }
-    const sub = (x) => esc(showDistrict ? `${x.office}, ${x.district}` : x.office);
+    const sub = (x) => esc(showDistrict ? `${x.office}, ${x.district}` : [x.office, x.area].filter(Boolean).join(', '));
     const pod = (x, cls) => x ? `<div class="pod ${cls}${x.isMe ? ' me' : ''}"><span class="who">${esc(x.name)}</span><span class="where">${sub(x)}</span>
       <div class="block"><span class="n">${x.rank}</span><span class="s">${fmt(x.score)}</span></div></div>` : '<div></div>';
     const row = (x) => `<div class="row${x.isMe ? ' me' : ''}"><span class="rk">${fmt(x.rank)}</span>
@@ -446,6 +455,10 @@
   $('#boardBtn').addEventListener('click', openBoard);
   $('#regForm').addEventListener('submit', submitRegister);
   $('#regForm').name.addEventListener('input', updateAvatar);
+  $('#regForm').district.addEventListener('change', (e) => fillAreas(e.target.value, ''));
+  ['input', 'change'].forEach((ev) => $('#regForm').addEventListener(ev, (e) => {
+    if (e.target.classList.contains('invalid')) { e.target.classList.remove('invalid'); $('#regError').textContent = ''; }
+  }));
   $('#regForm').phone.addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10); });
   $('#startBtn').addEventListener('click', startGame);
   $('#againBtn').addEventListener('click', startGame);

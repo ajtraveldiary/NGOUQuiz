@@ -4,7 +4,7 @@ import { neon } from '@neondatabase/serverless';
 import ADMIN_HTML from './admin.html';
 
 export const DISTRICTS = [
-  'Thiruvananthapuram', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam',
+  'Thiruvananthapuram North', 'Thiruvananthapuram South', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam',
   'Thrissur', 'Palakkad', 'Malappuram', 'Kozhikode', 'Wayanad', 'Kannur', 'Kasaragod',
 ];
 const LEVELS = ['easy', 'medium', 'hard'];
@@ -83,6 +83,13 @@ async function getSettings(d) {
   return { ...DEFAULT_SETTINGS, ...v, points: { ...DEFAULT_SETTINGS.points, ...(v.points || {}) } };
 }
 
+async function getAreas(d) {
+  const rows = await d.q(`SELECT district, name FROM areas ORDER BY district, lower(name)`);
+  const map = Object.fromEntries(DISTRICTS.map((x) => [x, []]));
+  for (const r of rows) if (map[r.district]) map[r.district].push(r.name);
+  return map;
+}
+
 // ---------- player auth ----------
 async function playerKey(env, id) { return `${id}.${await hmac(secret(env), 'player:' + id)}`; }
 async function verifyPlayer(env, key) {
@@ -121,7 +128,7 @@ async function leaderboard(d, district, playerId) {
   const params = district ? [district] : [];
   const top = await d.q(
     `${boardCte(!!district)}
-     SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.office, p.district
+     SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.office, p.district, p.area
      FROM ranked r JOIN players p ON p.id = r.player_id
      ORDER BY r.rank LIMIT 10`, params);
   const totalRow = await d.q(`${boardCte(!!district)} SELECT count(*)::int AS n FROM ranked`, params);
@@ -129,14 +136,14 @@ async function leaderboard(d, district, playerId) {
   if (playerId) {
     const r = await d.q(
       `${boardCte(!!district)}
-       SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.office, p.district
+       SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.office, p.district, p.area
        FROM ranked r JOIN players p ON p.id = r.player_id WHERE r.player_id = $${params.length + 1}`,
       [...params, playerId]);
     me = r[0] || null;
   }
   const map = (x) => x && ({
     rank: x.rank, score: x.score, timeMs: x.total_ms, correct: x.correct_count,
-    name: x.name, office: x.office, district: x.district, isMe: x.player_id === playerId,
+    name: x.name, office: x.office, district: x.district, area: x.area || null, isMe: x.player_id === playerId,
   });
   return { top: top.map(map), me: map(me), total: totalRow[0]?.n || 0 };
 }
@@ -148,9 +155,10 @@ async function apiConfig(env) {
   const counts = await d.q(`SELECT difficulty, count(*)::int AS n FROM questions WHERE active GROUP BY difficulty`);
   const avail = Object.fromEntries(counts.map((c) => [c.difficulty, c.n]));
   const total = LEVELS.reduce((t, l) => t + Math.min(s[l], avail[l] || 0), 0);
+  const areas = await getAreas(d);
   return json({
     title: s.title, subtitle: s.subtitle, tagline: s.tagline, values: s.values,
-    districts: DISTRICTS, levels: { easy: s.easy, medium: s.medium, hard: s.hard },
+    districts: DISTRICTS, areas, levels: { easy: s.easy, medium: s.medium, hard: s.hard },
     totalQuestions: total || s.easy + s.medium + s.hard,
     timeLimitSec: s.timeLimitSec, points: s.points, streakBonus: s.streakBonus, streakCap: s.streakCap,
     maxAttempts: s.maxAttempts, open: s.open,
@@ -166,19 +174,25 @@ async function apiRegister(env, req) {
   if (!DISTRICTS.includes(district)) fail(400, 'Choose your district.');
   if (!/^[6-9]\d{9}$/.test(phone)) fail(400, 'Enter a valid 10-digit mobile number.');
   const d = db(env);
+  const areaList = (await d.q(`SELECT name FROM areas WHERE district = $1`, [district])).map((r) => r.name);
+  let area = null;
+  if (areaList.length) {
+    area = areaList.find((n) => n === clean(b.area, 80)) || null;
+    if (!area) fail(400, 'Choose your area.');
+  }
   const rows = await d.q(
-    `INSERT INTO players (name, office, district, phone) VALUES ($1, $2, $3, $4)
+    `INSERT INTO players (name, office, district, area, phone) VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name, office = EXCLUDED.office,
-       district = EXCLUDED.district, updated_at = now()
-     RETURNING id, name, office, district, phone, (xmax = 0) AS created`,
-    [name, office, district, phone]);
+       district = EXCLUDED.district, area = EXCLUDED.area, updated_at = now()
+     RETURNING id, name, office, district, area, phone, (xmax = 0) AS created`,
+    [name, office, district, area, phone]);
   const p = rows[0];
   const stats = await d.q(
     `SELECT count(*) FILTER (WHERE status <> 'void')::int AS played, max(score) FILTER (WHERE status = 'finished') AS best
      FROM games WHERE player_id = $1`, [p.id]);
   return json({
     playerKey: await playerKey(env, p.id),
-    player: { name: p.name, office: p.office, district: p.district, phone: p.phone },
+    player: { name: p.name, office: p.office, district: p.district, area: p.area, phone: p.phone },
     returning: !p.created, played: stats[0].played, best: stats[0].best,
   });
 }
@@ -386,6 +400,14 @@ async function adminStats(env) {
       coalesce(max(g.score) FILTER (WHERE g.status = 'finished'), 0)::int AS top_score
     FROM players p LEFT JOIN games g ON g.player_id = p.id
     GROUP BY p.district ORDER BY players DESC`);
+  const byArea = await d.q(`
+    SELECT p.district, p.area, count(DISTINCT p.id)::int AS players,
+      count(g.id) FILTER (WHERE g.status = 'finished')::int AS games,
+      coalesce(round(avg(g.score) FILTER (WHERE g.status = 'finished')), 0)::int AS avg_score,
+      coalesce(max(g.score) FILTER (WHERE g.status = 'finished'), 0)::int AS top_score
+    FROM players p LEFT JOIN games g ON g.player_id = p.id
+    GROUP BY p.district, p.area`);
+  const areas = await getAreas(d);
   const daily = await d.q(`
     SELECT to_char(date_trunc('day', started_at AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD') AS day,
       count(*)::int AS games, count(*) FILTER (WHERE status = 'finished')::int AS finished,
@@ -406,7 +428,7 @@ async function adminStats(env) {
       round(100.0 * avg(a.is_correct::int))::int AS accuracy
     FROM answers a JOIN questions q ON q.id = a.question_id
     GROUP BY q.id HAVING count(*) >= 3 ORDER BY accuracy ASC, attempts DESC LIMIT 8`);
-  return json({ totals, byDistrict, daily, hourly, byLevel, spread, hardest, districts: DISTRICTS });
+  return json({ totals, byDistrict, byArea, areas, daily, hourly, byLevel, spread, hardest, districts: DISTRICTS });
 }
 
 function validateQuestion(b) {
@@ -476,12 +498,14 @@ async function adminImport(env, req) {
 async function adminPlayers(env, url) {
   const search = clean(url.searchParams.get('q'), 80);
   const district = url.searchParams.get('district') || '';
+  const area = url.searchParams.get('area') || '';
   const page = Math.max(0, Number(url.searchParams.get('page')) || 0);
   const like = `%${search}%`;
-  const where = `($1 = '' OR p.name ILIKE $2 OR p.office ILIKE $2 OR p.phone LIKE $2) AND ($3 = '' OR p.district = $3)`;
+  const where = `($1 = '' OR p.name ILIKE $2 OR p.office ILIKE $2 OR p.phone LIKE $2 OR p.area ILIKE $2)
+    AND ($3 = '' OR p.district = $3) AND ($4 = '' OR coalesce(p.area, '') = $4)`;
   const d = db(env);
   const rows = await d.q(`
-    SELECT p.id, p.name, p.office, p.district, p.phone, p.created_at,
+    SELECT p.id, p.name, p.office, p.district, p.area, p.phone, p.created_at,
       count(g.id) FILTER (WHERE g.status <> 'void')::int AS games,
       max(g.score) FILTER (WHERE g.status = 'finished') AS best,
       max(g.correct_count) FILTER (WHERE g.status = 'finished') AS best_correct,
@@ -489,8 +513,8 @@ async function adminPlayers(env, url) {
     FROM players p LEFT JOIN games g ON g.player_id = p.id
     WHERE ${where}
     GROUP BY p.id ORDER BY best DESC NULLS LAST, p.created_at DESC
-    LIMIT 50 OFFSET $4`, [search, like, district, page * 50]);
-  const total = await d.q(`SELECT count(*)::int AS n FROM players p WHERE ${where}`, [search, like, district]);
+    LIMIT 50 OFFSET $5`, [search, like, district, area, page * 50]);
+  const total = await d.q(`SELECT count(*)::int AS n FROM players p WHERE ${where}`, [search, like, district, area]);
   return json({ players: rows, total: total[0].n, page });
 }
 async function adminPlayer(env, id) {
@@ -514,23 +538,65 @@ async function adminSetGameStatus(env, id, status) {
   return json({ ok: true });
 }
 
+// ---------- areas (admin) ----------
+async function adminAreas(env) {
+  const rows = await db(env).q(`
+    SELECT a.id, a.district, a.name,
+      (SELECT count(*)::int FROM players p WHERE p.district = a.district AND p.area = a.name) AS players
+    FROM areas a ORDER BY a.district, lower(a.name)`);
+  return json({ districts: DISTRICTS, areas: rows });
+}
+async function adminAddAreas(env, req) {
+  const b = await body(req);
+  const district = String(b.district || '');
+  if (!DISTRICTS.includes(district)) fail(400, 'Choose a district.');
+  const names = [...new Set((Array.isArray(b.names) ? b.names : []).map((n) => clean(n, 80)).filter(Boolean))];
+  if (!names.length) fail(400, 'Type at least one area name.');
+  if (names.length > 200) fail(400, 'Add up to 200 areas at a time.');
+  const r = await db(env).q(
+    `INSERT INTO areas (district, name) SELECT $1, unnest($2::text[])
+     ON CONFLICT (district, name) DO NOTHING RETURNING id`, [district, names]);
+  return json({ added: r.length, skipped: names.length - r.length });
+}
+async function adminRenameArea(env, req, id) {
+  const name = clean((await body(req)).name, 80);
+  if (!name) fail(400, 'Area name is required.');
+  const d = db(env);
+  const cur = (await d.q(`SELECT district, name FROM areas WHERE id = $1`, [id]))[0];
+  if (!cur) fail(404, 'Area not found.');
+  if (cur.name === name) return json({ ok: true, playersUpdated: 0 });
+  if ((await d.q(`SELECT 1 FROM areas WHERE district = $1 AND name = $2`, [cur.district, name]))[0]) {
+    fail(409, `${cur.district} already has an area named ${name}.`);
+  }
+  await d.q(`UPDATE areas SET name = $2 WHERE id = $1`, [id, name]);
+  const moved = await d.q(
+    `UPDATE players SET area = $3, updated_at = now() WHERE district = $1 AND area = $2 RETURNING id`,
+    [cur.district, cur.name, name]);
+  return json({ ok: true, playersUpdated: moved.length });
+}
+async function adminDeleteArea(env, id) {
+  const r = await db(env).q(`DELETE FROM areas WHERE id = $1 RETURNING id`, [id]);
+  if (!r[0]) fail(404, 'Area not found.');
+  return json({ deleted: true });
+}
+
 async function adminExport(env, url) {
   const type = url.searchParams.get('type');
   const d = db(env);
   let head, rows;
   if (type === 'leaderboard') {
-    head = ['Rank', 'Name', 'Office', 'District', 'Phone', 'Best score', 'Correct', 'Time (s)', 'Finished at'];
+    head = ['Rank', 'Name', 'Office', 'District', 'Area', 'Phone', 'Best score', 'Correct', 'Time (s)', 'Finished at'];
     const r = await d.q(`${boardCte(false)}
-      SELECT r.rank, p.name, p.office, p.district, p.phone, r.score, r.correct_count, r.total_ms, r.finished_at
+      SELECT r.rank, p.name, p.office, p.district, p.area, p.phone, r.score, r.correct_count, r.total_ms, r.finished_at
       FROM ranked r JOIN players p ON p.id = r.player_id ORDER BY r.rank`);
-    rows = r.map((x) => [x.rank, x.name, x.office, x.district, x.phone, x.score, x.correct_count, (x.total_ms / 1000).toFixed(1), x.finished_at]);
+    rows = r.map((x) => [x.rank, x.name, x.office, x.district, x.area, x.phone, x.score, x.correct_count, (x.total_ms / 1000).toFixed(1), x.finished_at]);
   } else if (type === 'games') {
-    head = ['Game', 'Name', 'Office', 'District', 'Phone', 'Status', 'Score', 'Correct', 'Questions', 'Time (s)', 'Best streak', 'Started', 'Finished'];
+    head = ['Game', 'Name', 'Office', 'District', 'Area', 'Phone', 'Status', 'Score', 'Correct', 'Questions', 'Time (s)', 'Best streak', 'Started', 'Finished'];
     const r = await d.q(`
-      SELECT g.id, p.name, p.office, p.district, p.phone, g.status, g.score, g.correct_count,
+      SELECT g.id, p.name, p.office, p.district, p.area, p.phone, g.status, g.score, g.correct_count,
         cardinality(g.question_ids) AS total, g.total_ms, g.best_streak, g.started_at, g.finished_at
       FROM games g JOIN players p ON p.id = g.player_id ORDER BY g.started_at DESC`);
-    rows = r.map((x) => [x.id, x.name, x.office, x.district, x.phone, x.status, x.score, x.correct_count, x.total, (x.total_ms / 1000).toFixed(1), x.best_streak, x.started_at, x.finished_at]);
+    rows = r.map((x) => [x.id, x.name, x.office, x.district, x.area, x.phone, x.status, x.score, x.correct_count, x.total, (x.total_ms / 1000).toFixed(1), x.best_streak, x.started_at, x.finished_at]);
   } else if (type === 'questions') {
     head = ['difficulty', 'category', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'option_f', 'correct', 'explanation', 'active'];
     const r = await d.q(`SELECT * FROM questions ORDER BY id`);
@@ -539,12 +605,12 @@ async function adminExport(env, url) {
       return [x.difficulty, x.category, x.question, ...o, 'ABCDEF'[x.correct_index], x.explanation, x.active];
     });
   } else {
-    head = ['Name', 'Office', 'District', 'Phone', 'Registered', 'Games', 'Best score'];
+    head = ['Name', 'Office', 'District', 'Area', 'Phone', 'Registered', 'Games', 'Best score'];
     const r = await d.q(`
-      SELECT p.name, p.office, p.district, p.phone, p.created_at,
+      SELECT p.name, p.office, p.district, p.area, p.phone, p.created_at,
         count(g.id) FILTER (WHERE g.status <> 'void')::int AS games, max(g.score) FILTER (WHERE g.status = 'finished') AS best
       FROM players p LEFT JOIN games g ON g.player_id = p.id GROUP BY p.id ORDER BY p.created_at`);
-    rows = r.map((x) => [x.name, x.office, x.district, x.phone, x.created_at, x.games, x.best]);
+    rows = r.map((x) => [x.name, x.office, x.district, x.area, x.phone, x.created_at, x.games, x.best]);
   }
   const fmt = (v) => (v instanceof Date ? v.toISOString() : v);
   const csv = '﻿' + [head, ...rows].map((r) => r.map((v) => csvCell(fmt(v))).join(',')).join('\r\n');
@@ -624,6 +690,12 @@ async function route(req, env) {
       if (!id && m === 'POST') return adminSaveQuestion(env, req, null);
       if (/^\d+$/.test(id || '') && m === 'PUT') return adminSaveQuestion(env, req, Number(id));
       if (/^\d+$/.test(id || '') && m === 'DELETE') return adminDeleteQuestion(env, Number(id));
+    }
+    if (parts[0] === 'areas') {
+      if (!id && m === 'GET') return adminAreas(env);
+      if (!id && m === 'POST') return adminAddAreas(env, req);
+      if (/^\d+$/.test(id || '') && m === 'PUT') return adminRenameArea(env, req, Number(id));
+      if (/^\d+$/.test(id || '') && m === 'DELETE') return adminDeleteArea(env, Number(id));
     }
     if (parts[0] === 'players') {
       if (!id && m === 'GET') return adminPlayers(env, url);

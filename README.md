@@ -2,7 +2,7 @@
 
 Mobile-first quiz game on **Cloudflare Workers + Neon Postgres**.
 
-- Player card (name, office, district, mobile) → rules card → 3‑2‑1 countdown → 10 timed questions → score, rank and Top 10.
+- Player card (name, office, district, area, mobile). 15 union districts, with Thiruvananthapuram split into North and South; areas under each district are managed from the admin page → rules card → 3‑2‑1 countdown → 10 timed questions → score, rank and Top 10.
 - Questions march from easy to hard (default 4 easy, 4 medium, 2 hard, picked at random from the pool every game). Option order is shuffled per player so "the answer is B" can't be passed around.
 - Scoring per right answer: **level points + speed bonus + streak bonus**
   - Level points: easy 100, medium 150, hard 200
@@ -54,6 +54,7 @@ npm test             # end-to-end API tests on an in-memory Postgres
 | Tab | What you can do |
 |---|---|
 | Insights | Players, games, completion rate, average score; games per day; players and average score by district; right-answers spread; accuracy by level; play time of day (IST); hardest questions (check these for a wrong answer key) |
+| Districts & areas | Add areas under each of the 15 districts (paste a comma-separated list), rename (also updates players who chose it) or delete. A district with no areas skips the area question |
 | Questions | Search and filter; add / edit (2–6 options, Malayalam works); hide or delete (questions already answered are hidden instead, so history stays); import CSV |
 | Players & scores | Search by name, office or phone; filter by district; open a player to see every game and every answer; void a game to remove it from the board |
 | Settings | Title, organisation line, tagline, values shown on the welcome screen; questions per level; seconds per question; points; streak bonus; attempts per player; open/close the quiz; show explanations |
@@ -67,9 +68,14 @@ easy,Kerala,How many districts does Kerala have?,12,14,15,16,B,Kerala has 14 dis
 
 Use *Settings → Questions CSV* to download the current pool in the same format.
 
+## Upgrading an existing database
+
+If you already ran an earlier `db/schema.sql`, run the new `db/schema.sql` again in the Neon SQL Editor. It is safe to re-run: it adds the `areas` table and the players' `area` column, and moves players from "Thiruvananthapuram" to "Thiruvananthapuram North".
+
 ## Before launch
 
 - **Review the 36 starter questions** with the union's committee and replace or extend them. A pool of 30+ per level keeps games fresh.
 - Set *Attempts per player* if prizes are involved (e.g. 3).
 - Players are identified by mobile number without OTP. If prizes are significant, verify winners by phone before announcing, and use *Void this game* for any misuse.
+- Add the union areas for each district under *Districts & areas*.
 - Optionally add a Cloudflare rate-limiting rule on `/api/` (Security → WAF) for very high traffic.

@@ -4,30 +4,31 @@
   const S = { title: 'Arivu Quiz', subtitle: 'Kerala NGO Union, State Committee', tagline: 'Know your rights. Serve the people.',
     values: ['Solidarity', 'Democracy', 'Secularism', 'People-centred public service'],
     easy: 4, medium: 4, hard: 2, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
-  const DISTRICTS = ['Thiruvananthapuram', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam',
+  const DISTRICTS = ['Thiruvananthapuram North', 'Thiruvananthapuram South', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam',
     'Thrissur', 'Palakkad', 'Malappuram', 'Kozhikode', 'Wayanad', 'Kannur', 'Kasaragod'];
   const names = ['Sreeja R', 'Anil Kumar P', 'Fathima N', 'Rajesh V', 'Deepa Mol', 'Shibu Thomas', 'Lekha S', 'Nisar K', 'Bindu G', 'Vinod M',
     'Sajitha P', 'Arun Raj', 'Jaseena', 'Prasanth K', 'Mini Joseph', 'Haris T', 'Reshmi R', 'Sunil Babu', 'Anitha V', 'Manoj C',
     'Divya K', 'Shameer A', 'Latha Devi', 'Gireesh N', 'Smitha S', 'Jayakumar', 'Rasiya B', 'Santhosh P', 'Ambili', 'Noushad'];
   const offices = ['Taluk Office', 'PHC', 'Collectorate', 'DEO Office', 'Village Office', 'District Hospital', 'Treasury', 'PWD Section', 'Krishi Bhavan', 'Panchayat Office'];
+  const AREAS = Object.fromEntries(DISTRICTS.map((d) => [d, ['Civil Station', 'Hospital', 'Rural', 'Town']]));
   let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const people = names.map((n, i) => {
     const d = DISTRICTS[i % 14];
-    return { id: 'x' + i, name: n, office: offices[i % offices.length], district: d, score: Math.round(900 + rnd() * 2500), timeMs: Math.round(30000 + rnd() * 90000), correct: 0 };
+    return { id: 'x' + i, name: n, office: offices[i % offices.length], district: d, area: AREAS[d][i % 4], score: Math.round(900 + rnd() * 2500), timeMs: Math.round(30000 + rnd() * 90000), correct: 0 };
   });
   people.forEach((p) => { p.correct = Math.min(10, Math.max(3, Math.round(p.score / 330))); });
   let me = null, game = null;
   const delay = (v, ms = 120) => new Promise((r) => setTimeout(() => r(v), ms));
   const shuffle = (a) => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   function board(district) {
-    const all = [...people, ...(me && me.best != null ? [{ id: 'me', name: me.name, office: me.office, district: me.district, score: me.best, timeMs: me.bestMs, correct: me.bestCorrect }] : [])]
+    const all = [...people, ...(me && me.best != null ? [{ id: 'me', name: me.name, office: me.office, district: me.district, area: me.area, score: me.best, timeMs: me.bestMs, correct: me.bestCorrect }] : [])]
       .filter((p) => !district || p.district === district)
       .sort((a, b) => b.score - a.score || a.timeMs - b.timeMs)
-      .map((p, i) => ({ rank: i + 1, score: p.score, timeMs: p.timeMs, correct: p.correct, name: p.name, office: p.office, district: p.district, isMe: p.id === 'me' }));
+      .map((p, i) => ({ rank: i + 1, score: p.score, timeMs: p.timeMs, correct: p.correct, name: p.name, office: p.office, district: p.district, area: p.area, isMe: p.id === 'me' }));
     return { top: all.slice(0, 10), me: all.find((x) => x.isMe) || null, total: all.length };
   }
   window.QUIZ_API = {
-    config: () => delay({ ...S, districts: DISTRICTS, levels: { easy: 4, medium: 4, hard: 2 }, totalQuestions: 10, maxAttempts: 0, open: true }),
+    config: () => delay({ ...S, districts: DISTRICTS, areas: AREAS, levels: { easy: 4, medium: 4, hard: 2 }, totalQuestions: 10, maxAttempts: 0, open: true }),
     register: (p) => { me = { ...(me || {}), ...p }; return delay({ playerKey: 'demo', player: p, returning: false, played: 0, best: null }); },
     start: () => {
       const pick = (l, n) => shuffle(QUESTIONS.filter((q) => q.difficulty === l)).slice(0, n);
