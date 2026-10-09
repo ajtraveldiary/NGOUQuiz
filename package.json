@@ -1,6 +1,6 @@
 {
   "name": "ngo-union-quiz",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,8 @@
     "deploy": "wrangler deploy",
     "seed:build": "node scripts/build-seed.mjs",
     "test": "node scripts/test-api.mjs",
-    "local": "node scripts/local-server.mjs"
+    "local": "node scripts/local-server.mjs",
+    "stamp": "node scripts/stamp-version.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0"

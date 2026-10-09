@@ -139,6 +139,7 @@
     return { days, long, short };
   }
   function renderCampaign() {
+    if (!$('#campaignTicket') || !$('#campCard')) return; // page without the campaign parts
     const c = S.cfg?.campaign, w = campaignWhen(c);
     $('#campaignTicket').hidden = !c || !w;
     $('#campCard').hidden = !c || !w;
@@ -163,6 +164,18 @@
     $('#soundBtn').setAttribute('aria-pressed', String(Sound.on));
     $('#soundBtn').setAttribute('aria-label', Sound.on ? 'Sound on' : 'Sound off');
     try { S.cfg = await API.config(); } catch (e) { toast(e.message); S.cfg = null; }
+    // A phone can keep an old cached copy of the page after an update. If the page is older than the
+    // server, load the fresh page once (the guard stops a reload loop while a deploy is still rolling out).
+    const pageVersion = document.querySelector('meta[name="app-version"]')?.content;
+    if (S.cfg?.version && pageVersion && pageVersion !== S.cfg.version) {
+      let reloaded = null;
+      try { reloaded = sessionStorage.getItem('arivu.reloadedFor'); } catch { /* storage blocked */ }
+      if (reloaded !== S.cfg.version) {
+        try { sessionStorage.setItem('arivu.reloadedFor', S.cfg.version); } catch { /* storage blocked */ }
+        location.replace(location.pathname + '?v=' + encodeURIComponent(S.cfg.version));
+        return;
+      }
+    }
     const c = S.cfg || { title: 'Arivu Quiz', values: [], districts: [], areas: {}, totalQuestions: 10, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
     S.total = c.totalQuestions;
     const words = String(c.title).trim().split(/\s+/);
@@ -173,7 +186,7 @@
     if (c.subtitle) $('#orgName').textContent = c.subtitle;
     if (c.tagline) $('#tagline').textContent = c.tagline;
     $('#values').innerHTML = (c.values || []).map((v) => `<li>${esc(v)}</li>`).join('');
-    renderCampaign();
+    try { renderCampaign(); } catch (e) { console.error('campaign', e); }
     const opts = (c.districts || []).map((d) => `<option>${esc(d)}</option>`).join('');
     $('#regForm [name=district]').insertAdjacentHTML('beforeend', opts);
     $('#boardDistrict').insertAdjacentHTML('beforeend', opts);

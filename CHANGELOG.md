@@ -3,6 +3,13 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.3
+- Fix: after an update, a returning player's browser could mix the old cached page with the new code, and the site stopped loading (no districts, no scores)
+- The page is never cached; app.js and style.css links carry the version (`?v=1.6.3`), so every update loads matching files
+- If an old page is still open, it reloads itself once to the new version
+- The campaign section can no longer stop the rest of the page from starting
+- `npm run stamp` writes the package.json version into index.html (tests check it)
+
 ## 1.6.2
 - 27 brochure questions reworded as standalone questions: no "ലഘുലേഖ പ്രകാരം" or "…എന്ന് ലഘുലേഖ പറയുന്നു"; explanations updated too
 - Existing databases get the new wording automatically, once (questions edited in the admin page are left alone)

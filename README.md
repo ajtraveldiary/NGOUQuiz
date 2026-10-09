@@ -83,7 +83,7 @@ On its first request the Worker creates any missing tables, upgrades older datab
 
 ## Version
 
-The version number shows in small text on the opening screen, in the admin header and at `/api/health`. It comes from `version` in `package.json`; see `CHANGELOG.md`.
+The version number shows in small text on the opening screen, in the admin header and at `/api/health`. It comes from `version` in `package.json`; see `CHANGELOG.md`. After changing it, run `npm run stamp` so `public/index.html` and its file links carry the same version (the tests check this); an old page left open in a browser then reloads itself once.
 
 ## Troubleshooting
 

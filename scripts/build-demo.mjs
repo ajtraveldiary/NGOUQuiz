@@ -2,7 +2,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 const r = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const html = r('public/index.html');
-const body = html.slice(html.indexOf('<body>') + 6, html.indexOf('<script src="/app.js">'));
+const body = html.slice(html.indexOf('<body>') + 6, html.indexOf('<script src="/app.js'));
 const qs = JSON.parse(r('db/seed-questions.json'));
 const out = `<title>Arivu Quiz</title>
 <meta name="theme-color" content="#2B0710">

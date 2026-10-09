@@ -43,6 +43,12 @@ assert.equal(cfg.bonusQuestion, true);
 assert.equal(cfg.campaign.date, '2026-11-21');
 assert.equal(cfg.subtitle, 'Kerala NGO Union');
 assert.equal(cfg.version, JSON.parse(readFileSync(root + 'package.json', 'utf8')).version);
+{
+  const html = readFileSync(root + 'public/index.html', 'utf8');
+  for (const re of [/name="app-version" content="([^"]+)"/, /\/app\.js\?v=([^"]+)"/, /\/style\.css\?v=([^"]+)"/]) {
+    assert.equal(html.match(re)?.[1], cfg.version, 'run node scripts/stamp-version.mjs: ' + re);
+  }
+}
 assert.equal(cfg.districts.length, 15);
 assert.ok(cfg.districts.includes('Thiruvananthapuram North') && cfg.districts.includes('Thiruvananthapuram South'));
 assert.ok(!cfg.districts.includes('Thiruvananthapuram'));
