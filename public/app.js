@@ -158,10 +158,9 @@
     $('#soundBtn').setAttribute('aria-pressed', String(Sound.on));
     $('#soundBtn').setAttribute('aria-label', Sound.on ? 'Sound on' : 'Sound off');
     try { renderCampaign(); } catch (e) { console.error('campaign', e); }
-    // Show the player's button and the last known stats straight away; both requests run side by side
+    // The player's button shows straight away; the stats request runs alongside the settings request
     renderSplashPlayer();
-    renderStats(store.get('stats'));
-    const board = API.board('', S.me?.playerKey).then((b) => { store.set('stats', b && { plays: b.plays, total: b.total, top: b.top.slice(0, 1), me: b.me }); renderStats(b); }).catch(() => {});
+    const board = API.board('', S.me?.playerKey).then(renderStats).catch(() => {});
     try { S.cfg = await API.config(); } catch (e) { toast(e.message); S.cfg = null; }
     // A phone can keep an old cached copy of the page after an update. If the page is older than the
     // server, load the fresh page once (the guard stops a reload loop while a deploy is still rolling out).
@@ -198,15 +197,13 @@
     if (runs.length < 3) return setTimeout(() => probeSpeed(runs), 60);
     if (Math.min(...runs) > 15) goLite();
   }
-  // The stats lines keep their space from the start, so nothing below them jumps when they arrive
+  // The stats text is fixed in index.html (starting at 0); only the numbers change, counting up once the data arrives
   function renderStats(b) {
     if (!b) return;
-    const lines = [];
-    if (b.plays) lines.push(`<b>${fmt(b.plays)}</b> ${b.plays === 1 ? 'employee has' : 'employees have'} played so far`);
-    if (b.total) lines.push(`Top score <b>${fmt(b.top?.[0]?.score)}</b>` + (b.me ? `. You’re <b>#${fmt(b.me.rank)}</b>` : ''));
-    const el = $('#splashStats'), html = lines.join('<br>');
-    if (el.innerHTML === html) return;
-    el.innerHTML = html; el.classList.remove('in'); void el.offsetWidth; el.classList.add('in');
+    countUp($('#statPlays'), 0, b.plays || 0, 900);
+    countUp($('#statTop'), 0, b.top?.[0]?.score || 0, 900);
+    if (b.me) $('#statRank').textContent = fmt(b.me.rank);
+    $('#statMe').hidden = !b.me;
   }
   // Don't move the page if the player has already scrolled or tapped
   let touched = false;

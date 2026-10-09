@@ -3,6 +3,9 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.7.1
+- Opening screen stats are fixed text in the page: "0 employees have played so far / Top score 0." Only the numbers change, counting up once the data arrives ("You’re #N" is added for a player on the board). No saved copy on the phone any more
+
 ## 1.7.0 — smoother on low-powered phones
 - Question timer: the ring is a single CSS animation instead of being redrawn by script about 60 times a second; the number updates once a second
 - The flag waves three times when the page opens, then rests
