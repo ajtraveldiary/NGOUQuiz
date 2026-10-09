@@ -3,6 +3,10 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 2.3.0
+- Player card: an optional "Office name" field after the district, with the helper text "Government employees: the office where you work. Members of the public: leave it blank." A blank office is stored as empty
+- The office shows on the admin Players page (and its search) and in the leaderboard, games and players exports; it is never shown on the public leaderboard
+
 ## 2.2.0 — Kerala colours
 - New colour theme for the game and the admin page: deep backwater teal background, kasavu gold for the main buttons, timer and score, handloom cream cards, paddy green for right answers and laterite red-brown for wrong ones; pale mint for secondary text. Replaces the maroon and red palette
 - The results badge, welcome line, avatar and rank number use teal and gold (red-brown now only means a wrong answer, a hard question or time running out)

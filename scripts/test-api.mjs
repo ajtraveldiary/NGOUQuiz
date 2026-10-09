@@ -243,17 +243,22 @@ assert.equal(ok(await call('GET', '/api/leaderboard'), 'board').plays, lb1.plays
 ok(await call('POST', `/api/admin/games/${again.st.gameId}/restore`, {}, A), 'restore');
 const csv = await call('GET', '/api/admin/export?type=leaderboard', undefined, A);
 assert.ok(csv.body.includes('Anu Mohan'));
-// an old copy of the game may still send phone and office: they are ignored, and every card is a new player
+// office name is optional (blank for members of the public); a phone number is never stored; every card is a new player
 {
   const r1 = ok(await call('POST', '/api/register', { name: 'Old Client', office: 'DHS', district: 'Kollam', area: 'X', phone: '9876500000' }), 'old fields');
-  assert.deepEqual((await pg.query('SELECT office, phone FROM players WHERE name = $1', ['Old Client'])).rows[0], { office: null, phone: null });
+  assert.deepEqual((await pg.query('SELECT office, phone FROM players WHERE name = $1', ['Old Client'])).rows[0], { office: 'DHS', phone: null });
+  const pub = ok(await call('POST', '/api/register', { name: 'Public Person', district: 'Kollam', office: '   ' }), 'public');
+  assert.equal((await pg.query('SELECT office FROM players WHERE name = $1', ['Public Person'])).rows[0].office, null, 'blank office is stored as empty');
+  assert.ok(!('office' in pub.player));
+  assert.equal(ok(await call('GET', '/api/admin/players?q=DHS', undefined, A), 'search office').players[0].office, 'DHS');
+  assert.ok((await call('GET', '/api/admin/export?type=players', undefined, A)).body.includes('Office'));
   const r2 = ok(await call('POST', '/api/register', { name: 'Old Client', district: 'Kollam', phone: '9876500000' }), 'same again');
   assert.notEqual(r2.playerKey, r1.playerKey);
   assert.deepEqual(Object.keys(r2.player).sort(), ['district', 'name']);
   // a phone that still holds the key of a deleted player is asked for a new card
   await pg.query('DELETE FROM players WHERE name = $1', ['Old Client']);
   assert.equal((await call('POST', '/api/game/start', { playerKey: r2.playerKey })).status, 401);
-  console.log('✓ player card: name and district only; phone, office and area are never stored');
+  console.log('✓ player card: name, district and optional office; office searchable in admin, never public; no phone stored');
 }
 const qcsv = await call('GET', '/api/admin/export?type=questions', undefined, A);
 assert.ok(qcsv.body.split('\r\n').length > 30);

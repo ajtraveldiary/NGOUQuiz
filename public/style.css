@@ -130,6 +130,7 @@ button { cursor: pointer; }
 .field select { background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%230C2E2B' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 14px center; padding-right: 36px; }
 .field input:focus, .field select:focus { border-color: var(--night-3); outline: none; box-shadow: 0 0 0 3px rgba(28, 103, 96, .2); }
 .field small { color: #4F6E69; font-size: 13px; }
+.field em { font-style: normal; font-weight: 500; color: #4F6E69; }
 .field .invalid { border-color: var(--red); }
 .form-error { margin: 0; min-height: 1.2em; color: var(--red-deep); font-weight: 600; font-size: 15px; }
 .field-dark select { background-color: var(--night-2); color: #fff; border-color: var(--night-3); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%23D3E9E3' stroke-width='2'/%3E%3C/svg%3E"); }
