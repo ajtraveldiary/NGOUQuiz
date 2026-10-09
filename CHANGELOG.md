@@ -3,6 +3,9 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.13
+- Opening screen: total plays above the leaderboard line ("123 plays so far"). Every game started counts, and so does filling in the player card: a player who registered but never started a game counts once. Voided games don't count
+
 ## 1.6.12
 - Opening screen: the values row (Solidarity, Democracy, Secularism, People-centred public service) is removed
 

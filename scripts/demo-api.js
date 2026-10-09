@@ -31,7 +31,7 @@
       .filter((p) => !district || p.district === district)
       .sort((a, b) => b.score - a.score || a.timeMs - b.timeMs)
       .map((p, i) => ({ rank: i + 1, score: p.score, timeMs: p.timeMs, correct: p.correct, name: p.name, office: p.office, district: p.district, area: p.area, isMe: p.id === 'me' }));
-    return { top: all.slice(0, 10), me: all.find((x) => x.isMe) || null, total: all.length };
+    return { top: all.slice(0, 10), me: all.find((x) => x.isMe) || null, total: all.length, plays: people.length + (me ? Math.max(1, me.games || 0) : 0) };
   }
   window.QUIZ_API = {
     config: () => delay({ ...S, version: typeof APP_VERSION === 'string' ? APP_VERSION : undefined, districts: DISTRICTS, areas: AREAS, levels: { easy: 4, medium: 4, hard: 2 }, totalQuestions: 10, bonusQuestion: true, maxAttempts: 0, open: true }),
@@ -47,6 +47,7 @@
       const rank = { easy: 0, medium: 1, hard: 2 };
       const bonus = shuffle(QUESTIONS.filter((q) => q.campaign))[0];
       const qs = [...chosen.sort((a, b) => rank[a.difficulty] - rank[b.difficulty]), ...(bonus ? [bonus] : [])];
+      if (me) me.games = (me.games || 0) + 1;
       game = { qs, orders: qs.map((q) => shuffle(q.options.map((_, i) => i))), i: 0, served: null, score: 0, streak: 0, best: 0, correct: 0, ms: 0, answers: [] };
       return delay({ gameId: 'demo', total: qs.length, index: 0 });
     },

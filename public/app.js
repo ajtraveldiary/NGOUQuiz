@@ -174,10 +174,13 @@
     if (c.open === false) { $('#playBtn').disabled = true; $('#playBtn').textContent = 'Quiz is closed for now'; }
     renderSplashPlayer();
     API.board('', S.me?.playerKey).then((b) => {
-      if (!b.total) return;
+      const lines = [];
+      if (b.plays) lines.push(`<b>${fmt(b.plays)}</b> play${b.plays === 1 ? '' : 's'} so far`);
+      if (b.total) lines.push(`<b>${fmt(b.total)}</b> employees on the board. Top score <b>${fmt(b.top[0]?.score)}</b>` +
+        (b.me ? `. You're <b>#${fmt(b.me.rank)}</b>` : ''));
+      if (!lines.length) return;
       const el = $('#splashStats'); el.hidden = false;
-      el.innerHTML = `<b>${fmt(b.total)}</b> employees on the board. Top score <b>${fmt(b.top[0]?.score)}</b>` +
-        (b.me ? `. You're <b>#${fmt(b.me.rank)}</b>` : '');
+      el.innerHTML = lines.join('<br>');
     }).catch(() => {});
   }
   function renderSplashPlayer() {
