@@ -8,7 +8,9 @@ Mobile-first quiz game on **Cloudflare Workers + Neon Postgres**.
   - Level points: easy 100, medium 150, hard 200
   - Speed bonus: level points × (seconds left ÷ time limit)
   - Streak bonus: +25 for each answer in a row after the first, capped at +100
-  - Wrong answer or time out: 0 and the streak resets. The right answer is shown in green.
+  - Wrong answer: negative marks (easy −25, medium −40, hard −50, editable in Settings). A game score never goes below 0
+  - Skip button or time out: 0, no marks lost
+  - Wrong, skipped or timed out: the streak resets and the right answer is shown in green
 - Timing is measured **on the server**, so the score can't be faked from the browser. Refreshing the page doesn't reset the clock.
 - Leaderboard ranks each player's **best** game; ties go to the faster total time. Kerala-wide and per-district boards.
 - Hidden admin page: insights, question pool (add / edit / hide / CSV import), all players with every game and answer, void cheating games, CSV exports, game settings.

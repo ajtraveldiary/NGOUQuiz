@@ -210,8 +210,13 @@
     $('#welcomeLine').textContent = first ? (returning ? `Welcome back, ${first}.` : `Welcome, ${first}.`) : 'Welcome.';
     $('#ruleCount').textContent = `${c.totalQuestions || 10} questions`;
     $('#ruleTime').textContent = `${t} seconds`;
+    const pen = c.penalty || { easy: 0, medium: 0, hard: 0 };
+    const negative = ['easy', 'medium', 'hard'].some((l) => pen[l] > 0);
     $('#pointsTable').innerHTML = ['easy', 'medium', 'hard'].filter((l) => (c.levels || { easy: 1, medium: 1, hard: 1 })[l] > 0)
-      .map((l) => `<div class="${l}"><b>${p[l]}</b><span>${LEVEL_NAME[l]}</span></div>`).join('');
+      .map((l) => `<div class="${l}"><b>+${p[l]}</b><span>${LEVEL_NAME[l]}</span>${pen[l] ? `<small>−${pen[l]} if wrong</small>` : ''}</div>`).join('');
+    $('#ruleNegative').innerHTML = negative
+      ? '<b>Wrong answers cost marks.</b> Not sure? Tap <b>Skip</b> to move on without losing any. Running out of time costs nothing either.'
+      : '<b>Not sure?</b> Tap <b>Skip</b> to move on.';
     const left = Math.round(t * 0.6), speed = Math.round(p.medium * left / t);
     $('#ruleExample').textContent = `Example: a medium question answered with ${left} of ${t} seconds left earns ${p.medium} + ${speed} speed bonus = ${p.medium + speed}. Get the next one right too and add a ${c.streakBonus ?? 25}-point streak bonus.`;
     show('rules');
@@ -277,6 +282,7 @@
     box.innerHTML = q.options.map((o, i) =>
       `<button class="opt" type="button" data-i="${i}"><span class="key">${'ABCDEF'[i]}</span><span class="txt">${esc(o)}</span></button>`).join('');
     $('#feedback').hidden = true;
+    const sk = $('#skipBtn'); sk.hidden = false; sk.disabled = false;
     startTimer(q.remainingMs, q.limitMs);
   }
 
@@ -305,7 +311,8 @@
     const box = $('#options'), btns = [...box.children];
     box.classList.add('locked');
     btns.forEach((b) => { b.disabled = true; });
-    if (choice !== null) { btns[choice]?.classList.add('chosen'); Sound.tap(); }
+    $('#skipBtn').disabled = true;
+    if (typeof choice === 'number') { btns[choice]?.classList.add('chosen'); Sound.tap(); }
     let r;
     try { r = await API.answer(S.me.playerKey, S.gameId, S.q.index, choice); }
     catch (e) {
@@ -313,6 +320,7 @@
       if (attempt < 2 && !e.status) { await wait(800 * (attempt + 1)); return submit(choice, attempt + 1); }
       toast(e.message + ' Tap your answer again.');
       S.answered = false; box.classList.remove('locked'); btns.forEach((b) => { b.disabled = false; b.classList.remove('chosen'); });
+      $('#skipBtn').disabled = false;
       return;
     }
     reveal(choice, r, btns);
@@ -322,7 +330,8 @@
     btns.forEach((b) => b.classList.remove('chosen'));
     const right = btns[r.correctChoice];
     const li = $('#march').children[S.q.index];
-    li.classList.remove('now'); li.classList.add(r.correct ? 'ok' : 'no');
+    li.classList.remove('now'); li.classList.add(r.correct ? 'ok' : r.wrong ? 'no' : 'skip');
+    $('#skipBtn').hidden = true;
     const pts = $('#fbPoints'), line = $('#fbLine');
     if (r.correct) {
       right.classList.add('right');
@@ -333,18 +342,26 @@
       if (r.breakdown.speed) parts.push(`${r.breakdown.speed} speed`);
       if (r.breakdown.streak) parts.push(`${r.breakdown.streak} streak`);
       line.textContent = parts.join(' + ') + ` in ${secs(r.timeMs)}`;
-    } else {
-      if (choice !== null && btns[choice]) btns[choice].classList.add('wrong');
+    } else if (r.wrong) {
+      if (btns[choice]) btns[choice].classList.add('wrong');
       right.classList.add('right');
       right.insertAdjacentHTML('beforeend', '<span class="tag">Right answer</span>');
       Sound.bad(); buzz([70, 40, 70]);
-      pts.className = 'fb-points zero';
-      pts.textContent = r.timedOut ? "Time's up" : 'Not quite';
-      line.textContent = S.streak >= 2 ? `Streak of ${S.streak} ends here. Keep marching.` : 'The right answer is marked in green.';
+      pts.className = 'fb-points minus';
+      pts.textContent = r.penalty ? '−' + fmt(r.penalty) : 'Not quite';
+      const lost = r.penalty ? `Wrong answer, ${r.penalty} marks lost.` : r.fullPenalty ? 'Wrong answer. Your score is already at zero.' : 'Wrong answer.';
+      line.textContent = lost + (S.streak >= 2 ? ` Streak of ${S.streak} ends here.` : ' The right answer is in green.');
+    } else {
+      right.classList.add('right');
+      right.insertAdjacentHTML('beforeend', '<span class="tag">Right answer</span>');
+      Sound.tap();
+      pts.className = 'fb-points skip';
+      pts.textContent = r.skipped ? 'Skipped' : "Time's up";
+      line.textContent = 'No marks lost.' + (S.streak >= 2 ? ` Streak of ${S.streak} ends here.` : ' The right answer is in green.');
     }
     $('#fbExplain').textContent = r.explanation || '';
     countUp($('#hudScore'), S.score, r.score);
-    if (r.points) { const h = $('#hudScore'); h.classList.remove('bump'); void h.offsetWidth; h.classList.add('bump'); }
+    if (r.points) { const h = $('#hudScore'), cls = r.points > 0 ? 'bump' : 'drop'; h.classList.remove('bump', 'drop'); void h.offsetWidth; h.classList.add(cls); }
     S.score = r.score; setStreak(r.streak);
     const fb = $('#feedback'); fb.hidden = false;
     requestAnimationFrame(() => fb.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' }));
@@ -387,8 +404,16 @@
     S.result = r;
     $('#resBadge').textContent = badgeFor(r.correct, r.total);
     countUp($('#resScore'), 0, r.score, 1400);
-    $('#resDots').innerHTML = r.answers.map((a, i) =>
-      `<li class="${a.correct ? 'ok' : 'no'}" style="animation-delay:${0.2 + i * 0.06}s" title="Question ${i + 1}">${a.correct ? '✓' : '✕'}</li>`).join('');
+    const dot = { right: ['ok', '✓', 'right'], wrong: ['no', '✕', 'wrong'], skipped: ['skip', '–', 'skipped'], timeout: ['skip', '–', 'time ran out'] };
+    $('#resDots').innerHTML = r.answers.map((a, i) => {
+      const [cls, mark, label] = dot[a.state] || (a.correct ? dot.right : dot.wrong);
+      return `<li class="${cls}" style="animation-delay:${0.2 + i * 0.06}s" title="Question ${i + 1}: ${label}">${mark}</li>`;
+    }).join('');
+    const notes = [];
+    if (r.wrong) notes.push(`${r.wrong} wrong${r.marksLost ? `, ${fmt(r.marksLost)} marks lost` : ''}`);
+    if (r.skipped) notes.push(`${r.skipped} skipped`);
+    if (r.timedOut) notes.push(`${r.timedOut} ran out of time`);
+    $('#resNote').textContent = notes.length ? notes.join('. ') + '.' : '';
     $('#resCorrect').textContent = `${r.correct}/${r.total}`;
     $('#resTime').textContent = secs(r.timeMs);
     $('#resStreak').textContent = r.bestStreak;
@@ -468,6 +493,7 @@
     submit(Number(b.dataset.i));
   });
   $('#nextBtn').addEventListener('click', () => { if ($('#nextBtn .lbl').textContent === 'Try again') { $('#feedback').hidden = true; return loadNext(); } goNext(); });
+  $('#skipBtn').addEventListener('click', () => { if (!S.answered) submit('skip'); });
   $('#tabAll').addEventListener('click', () => setTab('all'));
   $('#tabDistrict').addEventListener('click', () => setTab('district'));
   $('#shareBtn').addEventListener('click', share);
@@ -481,6 +507,7 @@
   });
   document.addEventListener('keydown', (e) => {
     if (!$('#screen-quiz').classList.contains('is-active') || S.answered) return;
+    if (e.key.toLowerCase() === 's') return submit('skip');
     const i = 'abcdef'.indexOf(e.key.toLowerCase());
     if (i >= 0 && i < (S.q?.options.length || 0)) submit(i);
   });

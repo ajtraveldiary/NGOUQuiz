@@ -3,7 +3,7 @@
 (() => {
   const S = { title: 'Arivu Quiz', subtitle: 'Kerala NGO Union, State Committee', tagline: 'Know your rights. Serve the people.',
     values: ['Solidarity', 'Democracy', 'Secularism', 'People-centred public service'],
-    easy: 4, medium: 4, hard: 2, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
+    easy: 4, medium: 4, hard: 2, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, penalty: { easy: 25, medium: 40, hard: 50 }, streakBonus: 25, streakCap: 100 };
   const DISTRICTS = ['Thiruvananthapuram North', 'Thiruvananthapuram South', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam',
     'Thrissur', 'Palakkad', 'Malappuram', 'Kozhikode', 'Wayanad', 'Kannur', 'Kasaragod'];
   const names = ['Sreeja R', 'Anil Kumar P', 'Fathima N', 'Rajesh V', 'Deepa Mol', 'Shibu Thomas', 'Lekha S', 'Nisar K', 'Bindu G', 'Vinod M',
@@ -47,22 +47,27 @@
     answer: (k, id, index, choice) => {
       const q = game.qs[game.i], order = game.orders[game.i], lim = S.timeLimitSec * 1000;
       const t = Math.min(lim, Math.max(0, Date.now() - game.served - 150));
-      const ok = choice !== null && order[choice] === q.correct;
+      const skipped = choice === 'skip', picked = typeof choice === 'number';
+      const ok = picked && order[choice] === q.correct, wrong = picked && !ok;
       const base = ok ? S.points[q.difficulty] : 0, speed = ok ? Math.round(base * (lim - t) / lim) : 0;
       game.streak = ok ? game.streak + 1 : 0; game.best = Math.max(game.best, game.streak);
       const st = ok && game.streak >= 2 ? Math.min(S.streakCap, S.streakBonus * (game.streak - 1)) : 0;
-      const pts = base + speed + st;
-      game.score += pts; game.correct += ok ? 1 : 0; game.ms += t; game.answers.push({ correct: ok, points: pts });
+      const penalty = wrong ? Math.min(S.penalty[q.difficulty], game.score) : 0;
+      const pts = ok ? base + speed + st : -penalty;
+      const state = ok ? 'right' : wrong ? 'wrong' : skipped ? 'skipped' : 'timeout';
+      game.score += pts; game.correct += ok ? 1 : 0; game.ms += t; game.answers.push({ correct: ok, points: pts, state });
       game.i++; game.served = null;
       const done = game.i >= game.qs.length;
-      return delay({ correct: ok, timedOut: choice === null, correctChoice: order.indexOf(q.correct), points: pts,
+      return delay({ correct: ok, wrong, skipped, timedOut: choice === null, penalty, fullPenalty: wrong ? S.penalty[q.difficulty] : 0, correctChoice: order.indexOf(q.correct), points: pts,
         breakdown: { base, speed, streak: st }, timeMs: t, score: game.score, streak: game.streak, done, explanation: q.explanation });
     },
     result: () => {
       const pb = me.best == null || game.score > me.best;
       if (pb) { me.best = game.score; me.bestMs = game.ms; me.bestCorrect = game.correct; }
       return delay({ score: game.score, correct: game.correct, total: game.qs.length, timeMs: game.ms, bestStreak: game.best,
-        personalBest: pb, answers: game.answers, attemptsLeft: null, district: me.district, overall: board(null), districtBoard: board(me.district) }, 400);
+        personalBest: pb, answers: game.answers,
+        wrong: game.answers.filter((a) => a.state === 'wrong').length, skipped: game.answers.filter((a) => a.state === 'skipped').length,
+        timedOut: game.answers.filter((a) => a.state === 'timeout').length, marksLost: -game.answers.reduce((x, a) => x + Math.min(0, a.points), 0), attemptsLeft: null, district: me.district, overall: board(null), districtBoard: board(me.district) }, 400);
     },
     board: (district) => delay(board(district || null)),
   };

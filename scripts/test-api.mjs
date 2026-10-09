@@ -121,9 +121,40 @@ assert.equal(p3.res.overall.me.rank, 2);
 assert.equal(p3.res.overall.total, 3);
 console.log('✓ half-right game score', p3.res.score, 'rank', p3.res.overall.me.rank);
 
+// Player 4: right, wrong, skip, wrong... checks negative marks and skips exactly
+{
+  const reg = ok(await call('POST', '/api/register', { name: 'Deepa', office: 'DHS', district: 'Kottayam', phone: '9000000002' }), 'reg4');
+  const st = ok(await call('POST', '/api/game/start', { playerKey: reg.playerKey }), 'start4');
+  const peek = async (i) => {
+    const g = (await pg.query('SELECT question_ids, option_orders FROM games WHERE id = $1', [st.gameId])).rows[0];
+    const qq = (await pg.query('SELECT correct_index FROM questions WHERE id = $1', [g.question_ids[i]])).rows[0];
+    return g.option_orders[i].indexOf(qq.correct_index);
+  };
+  const ans = async (i, choice) => {
+    ok(await call('POST', '/api/game/next', { playerKey: reg.playerKey, gameId: st.gameId }), 'next4');
+    return ok(await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st.gameId, index: i, choice }), 'ans4');
+  };
+  const a0 = await ans(0, await peek(0));                       // right (easy): about +200
+  assert.ok(a0.correct && a0.points > 190);
+  const a1 = await ans(1, ((await peek(1)) + 1) % 4);            // wrong (easy): -25
+  assert.equal(a1.wrong, true); assert.equal(a1.points, -25); assert.equal(a1.penalty, 25); assert.equal(a1.streak, 0);
+  assert.equal(a1.score, a0.points - 25);
+  const a2 = await ans(2, 'skip');                               // skip: 0, no penalty
+  assert.equal(a2.skipped, true); assert.equal(a2.points, 0); assert.equal(a2.score, a1.score); assert.equal(a2.timedOut, false);
+  for (let i = 3; i < 10; i++) await ans(i, ((await peek(i)) + 1) % 4); // all wrong: score floors at 0
+  const res = ok(await call('POST', '/api/game/result', { playerKey: reg.playerKey, gameId: st.gameId }), 'res4');
+  assert.equal(res.score, 0);
+  assert.equal(res.wrong, 8); assert.equal(res.skipped, 1); assert.equal(res.correct, 1);
+  assert.equal(res.marksLost, a0.points);
+  assert.deepEqual(res.answers.slice(0, 3).map((a) => a.state), ['right', 'wrong', 'skipped']);
+  assert.equal((await pg.query('SELECT count(*)::int AS n FROM answers WHERE game_id = $1 AND skipped', [st.gameId])).rows[0].n, 1);
+  assert.equal((await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st.gameId, index: 9, choice: 'nope' })).status, 409);
+  console.log('✓ negative marks, skip without penalty, score never below zero');
+}
+
 // Same phone registers again → same player, replay; best score counts once on board
 const again = await playGame({ name: 'Biju K', office: 'Taluk Hospital', district: 'Kollam', area: 'Kottarakkara', phone: '09123456789' }, cheatCorrect);
-assert.equal(again.res.overall.total, 3);
+assert.equal(again.res.overall.total, 4);
 assert.ok(again.res.personalBest);
 console.log('✓ replay keeps one board entry; Biju now rank', again.res.overall.me.rank);
 
@@ -147,8 +178,8 @@ const page = await call('GET', '/secret-room');
 assert.equal(page.status, 200);
 assert.equal(page.headers.get('x-robots-tag'), 'noindex, nofollow');
 const stats = ok(await call('GET', '/api/admin/stats', undefined, A), 'stats');
-assert.equal(stats.totals.players, 3);
-assert.equal(stats.totals.finished, 4);
+assert.equal(stats.totals.players, 4);
+assert.equal(stats.totals.finished, 5);
 const qs = ok(await call('GET', '/api/admin/questions', undefined, A), 'questions');
 assert.equal(qs.questions.length, 36);
 const created = ok(await call('POST', '/api/admin/questions', { question: 'ചോദ്യം?', options: ['ഒന്ന്', 'രണ്ട്', 'മൂന്ന്'], correct_index: 1, difficulty: 'easy', category: 'Test' }, A), 'create q');

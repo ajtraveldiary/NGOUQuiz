@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS = {
   easy: 4, medium: 4, hard: 2,
   timeLimitSec: 15,
   points: { easy: 100, medium: 150, hard: 200 },
+  penalty: { easy: 25, medium: 40, hard: 50 },   // marks lost for a wrong answer (0 = no negative marking)
   streakBonus: 25,
   streakCap: 100,
   maxAttempts: 0,          // 0 = unlimited replays (best score counts)
@@ -85,7 +86,7 @@ function db(env) {
 // ---------- automatic database setup ----------
 // Creates missing tables, upgrades older databases and loads starter questions into an empty pool.
 // Runs once per Worker instance; afterwards it costs a single quick check.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const schemaReady = new Map(); // per database
 function sqlStatements(text) {
   return text.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
@@ -135,7 +136,11 @@ function secret(env) {
 async function getSettings(d) {
   const rows = await d.q(`SELECT value FROM settings WHERE key = 'game'`);
   const v = rows[0]?.value || {};
-  return { ...DEFAULT_SETTINGS, ...v, points: { ...DEFAULT_SETTINGS.points, ...(v.points || {}) } };
+  return {
+    ...DEFAULT_SETTINGS, ...v,
+    points: { ...DEFAULT_SETTINGS.points, ...(v.points || {}) },
+    penalty: { ...DEFAULT_SETTINGS.penalty, ...(v.penalty || {}) },
+  };
 }
 
 async function getAreas(d) {
@@ -215,7 +220,7 @@ async function apiConfig(env) {
     title: s.title, subtitle: s.subtitle, tagline: s.tagline, values: s.values,
     districts: DISTRICTS, areas, levels: { easy: s.easy, medium: s.medium, hard: s.hard },
     totalQuestions: total || s.easy + s.medium + s.hard,
-    timeLimitSec: s.timeLimitSec, points: s.points, streakBonus: s.streakBonus, streakCap: s.streakCap,
+    timeLimitSec: s.timeLimitSec, points: s.points, penalty: s.penalty, streakBonus: s.streakBonus, streakCap: s.streakCap,
     maxAttempts: s.maxAttempts, open: s.open, version: VERSION,
   });
 }
@@ -291,7 +296,7 @@ async function apiStart(env, req) {
   const lens = await d.q(`SELECT id, jsonb_array_length(options)::int AS n FROM questions WHERE id = ANY($1::int[])`, [picked]);
   const nById = Object.fromEntries(lens.map((x) => [x.id, x.n]));
   const orders = picked.map((id) => shuffle([...Array(nById[id]).keys()]));
-  const config = { limitMs: s.timeLimitSec * 1000, points: s.points, streakBonus: s.streakBonus, streakCap: s.streakCap, showExplanation: s.showExplanation };
+  const config = { limitMs: s.timeLimitSec * 1000, points: s.points, penalty: s.penalty, streakBonus: s.streakBonus, streakCap: s.streakCap, showExplanation: s.showExplanation };
   const g = await d.q(
     `INSERT INTO games (player_id, question_ids, option_orders, config) VALUES ($1, $2::int[], $3::jsonb, $4::jsonb) RETURNING id`,
     [pid, picked, JSON.stringify(orders), JSON.stringify(config)]);
@@ -345,19 +350,24 @@ async function apiAnswer(env, req) {
   const order = g.option_orders[idx];
   const cfg = g.config;
 
-  const choice = b.choice === null || b.choice === undefined ? null : Number(b.choice);
+  // choice: option index, 'skip' (no penalty), or null (time ran out, no penalty)
+  const skipped = b.choice === 'skip';
+  const choice = skipped || b.choice === null || b.choice === undefined ? null : Number(b.choice);
   if (choice !== null && !(Number.isInteger(choice) && choice >= 0 && choice < order.length)) fail(400, 'Invalid option.');
   const elapsed = Math.max(0, (g.elapsed || 0) - GRACE_MS);
   const late = elapsed > cfg.limitMs + LATE_MS;
   const chosenOrig = choice === null ? null : order[choice];
   const correct = !late && chosenOrig !== null && chosenOrig === q.correct_index;
+  const wrong = !late && chosenOrig !== null && !correct;
   const timeMs = Math.min(elapsed, cfg.limitMs);
 
   const base = correct ? cfg.points[q.difficulty] : 0;
   const speed = correct ? Math.round(base * Math.max(0, cfg.limitMs - timeMs) / cfg.limitMs) : 0;
   const streak = correct ? g.streak + 1 : 0;
   const streakPts = correct && streak >= 2 ? Math.min(cfg.streakCap, cfg.streakBonus * (streak - 1)) : 0;
-  const points = base + speed + streakPts;
+  // Negative marks: never take the game score below zero
+  const penalty = wrong ? Math.min(Number(cfg.penalty?.[q.difficulty]) || 0, Math.max(0, g.score)) : 0;
+  const points = correct ? base + speed + streakPts : -penalty;
   const done = idx + 1 >= g.question_ids.length;
 
   const upd = await d.q(
@@ -371,13 +381,14 @@ async function apiAnswer(env, req) {
     [g.id, idx, idx + 1, points, correct ? 1 : 0, timeMs, streak, done]);
   if (!upd[0]) fail(409, 'That question was already answered.');
   await d.q(
-    `INSERT INTO answers (game_id, q_index, question_id, chosen_index, is_correct, time_ms, points)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING`,
-    [g.id, idx, qid, chosenOrig, correct, timeMs, points]);
+    `INSERT INTO answers (game_id, q_index, question_id, chosen_index, is_correct, time_ms, points, skipped)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING`,
+    [g.id, idx, qid, chosenOrig, correct, timeMs, points, skipped]);
 
   return json({
-    correct, timedOut: choice === null || late, correctChoice: order.indexOf(q.correct_index),
-    points, breakdown: { base, speed, streak: streakPts }, timeMs,
+    correct, wrong, skipped, timedOut: !skipped && (choice === null || late), correctChoice: order.indexOf(q.correct_index),
+    points, penalty, fullPenalty: wrong ? Number(cfg.penalty?.[q.difficulty]) || 0 : 0,
+    breakdown: { base, speed, streak: streakPts }, timeMs,
     score: upd[0].score, streak, done,
     explanation: cfg.showExplanation ? q.explanation || null : null,
   });
@@ -391,7 +402,8 @@ async function apiResult(env, req) {
   if (g.status === 'playing') fail(409, 'Finish the game first.');
   const s = await getSettings(d);
   const player = (await d.q(`SELECT name, district FROM players WHERE id = $1`, [pid]))[0];
-  const answers = await d.q(`SELECT is_correct, points FROM answers WHERE game_id = $1 ORDER BY q_index`, [g.id]);
+  const answers = await d.q(`SELECT is_correct, points, skipped, chosen_index FROM answers WHERE game_id = $1 ORDER BY q_index`, [g.id]);
+  const state = (a) => (a.is_correct ? 'right' : a.skipped ? 'skipped' : a.chosen_index === null ? 'timeout' : 'wrong');
   const best = (await d.q(
     `SELECT id FROM games WHERE player_id = $1 AND status = 'finished'
      ORDER BY score DESC, total_ms ASC, finished_at ASC LIMIT 1`, [pid]))[0];
@@ -401,7 +413,11 @@ async function apiResult(env, req) {
     score: g.score, correct: g.correct_count, total: g.question_ids.length, timeMs: g.total_ms,
     bestStreak: g.best_streak, voided: g.status === 'void',
     personalBest: best?.id === g.id,
-    answers: answers.map((a) => ({ correct: a.is_correct, points: a.points })),
+    answers: answers.map((a) => ({ correct: a.is_correct, points: a.points, state: state(a) })),
+    wrong: answers.filter((a) => state(a) === 'wrong').length,
+    skipped: answers.filter((a) => state(a) === 'skipped').length,
+    timedOut: answers.filter((a) => state(a) === 'timeout').length,
+    marksLost: -answers.reduce((t, a) => t + Math.min(0, a.points), 0),
     attemptsLeft: s.maxAttempts > 0 ? Math.max(0, s.maxAttempts - played) : null,
     district: player.district, overall, districtBoard: district,
   });
@@ -507,7 +523,8 @@ async function adminQuestions(env) {
     SELECT q.id, q.question, q.options, q.correct_index, q.difficulty, q.category, q.explanation, q.active, q.updated_at,
       count(a.question_id)::int AS attempts,
       coalesce(round(100.0 * avg(a.is_correct::int)), 0)::int AS accuracy,
-      coalesce(round(avg(a.time_ms)), 0)::int AS avg_ms
+      coalesce(round(avg(a.time_ms)), 0)::int AS avg_ms,
+      count(*) FILTER (WHERE a.skipped)::int AS skipped
     FROM questions q LEFT JOIN answers a ON a.question_id = q.id
     GROUP BY q.id ORDER BY q.id DESC`);
   return json({ questions: rows });
@@ -580,7 +597,7 @@ async function adminPlayer(env, id) {
     SELECT id, score, correct_count, cardinality(question_ids) AS total, total_ms, best_streak, status, started_at, finished_at
     FROM games WHERE player_id = $1 ORDER BY started_at DESC`, [id]);
   const answers = await d.q(`
-    SELECT a.game_id, a.q_index, a.is_correct, a.time_ms, a.points, a.chosen_index, q.question, q.options, q.correct_index, q.difficulty
+    SELECT a.game_id, a.q_index, a.is_correct, a.skipped, a.time_ms, a.points, a.chosen_index, q.question, q.options, q.correct_index, q.difficulty
     FROM answers a JOIN games g ON g.id = a.game_id JOIN questions q ON q.id = a.question_id
     WHERE g.player_id = $1 ORDER BY a.answered_at`, [id]);
   return json({ player: p, games, answers });
@@ -646,12 +663,15 @@ async function adminExport(env, url) {
       FROM ranked r JOIN players p ON p.id = r.player_id ORDER BY r.rank`);
     rows = r.map((x) => [x.rank, x.name, x.office, x.district, x.area, x.phone, x.score, x.correct_count, (x.total_ms / 1000).toFixed(1), x.finished_at]);
   } else if (type === 'games') {
-    head = ['Game', 'Name', 'Office', 'District', 'Area', 'Phone', 'Status', 'Score', 'Correct', 'Questions', 'Time (s)', 'Best streak', 'Started', 'Finished'];
+    head = ['Game', 'Name', 'Office', 'District', 'Area', 'Phone', 'Status', 'Score', 'Correct', 'Wrong', 'Skipped', 'Marks lost', 'Questions', 'Time (s)', 'Best streak', 'Started', 'Finished'];
     const r = await d.q(`
       SELECT g.id, p.name, p.office, p.district, p.area, p.phone, g.status, g.score, g.correct_count,
+        (SELECT count(*) FROM answers a WHERE a.game_id = g.id AND NOT a.is_correct AND NOT a.skipped AND a.chosen_index IS NOT NULL)::int AS wrong,
+        (SELECT count(*) FROM answers a WHERE a.game_id = g.id AND a.skipped)::int AS skipped,
+        (SELECT coalesce(-sum(a.points) FILTER (WHERE a.points < 0), 0) FROM answers a WHERE a.game_id = g.id)::int AS lost,
         cardinality(g.question_ids) AS total, g.total_ms, g.best_streak, g.started_at, g.finished_at
       FROM games g JOIN players p ON p.id = g.player_id ORDER BY g.started_at DESC`);
-    rows = r.map((x) => [x.id, x.name, x.office, x.district, x.area, x.phone, x.status, x.score, x.correct_count, x.total, (x.total_ms / 1000).toFixed(1), x.best_streak, x.started_at, x.finished_at]);
+    rows = r.map((x) => [x.id, x.name, x.office, x.district, x.area, x.phone, x.status, x.score, x.correct_count, x.wrong, x.skipped, x.lost, x.total, (x.total_ms / 1000).toFixed(1), x.best_streak, x.started_at, x.finished_at]);
   } else if (type === 'questions') {
     head = ['difficulty', 'category', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'option_f', 'correct', 'explanation', 'active'];
     const r = await d.q(`SELECT * FROM questions ORDER BY id`);
@@ -694,6 +714,11 @@ async function adminSettings(env, req) {
       easy: int(b.points?.easy, 0, 10000, cur.points.easy),
       medium: int(b.points?.medium, 0, 10000, cur.points.medium),
       hard: int(b.points?.hard, 0, 10000, cur.points.hard),
+    },
+    penalty: {
+      easy: int(b.penalty?.easy, 0, 10000, cur.penalty.easy),
+      medium: int(b.penalty?.medium, 0, 10000, cur.penalty.medium),
+      hard: int(b.penalty?.hard, 0, 10000, cur.penalty.hard),
     },
     streakBonus: int(b.streakBonus, 0, 1000, cur.streakBonus),
     streakCap: int(b.streakCap, 0, 5000, cur.streakCap),

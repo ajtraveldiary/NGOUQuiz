@@ -217,6 +217,23 @@ button { cursor: pointer; }
 @keyframes rightPop { 40% { transform: scale(1.04); } }
 @keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
 
+.btn-skip {
+  margin-top: auto; width: 100%; padding: 13px 16px; border-radius: var(--r-md);
+  background: transparent; border: 2px dashed rgba(255, 255, 255, .25); color: var(--mist);
+  font-size: 17px; font-weight: 700; display: flex; justify-content: center; align-items: baseline; gap: 8px;
+}
+.btn-skip small { font-weight: 500; font-size: 13px; color: var(--mist-2); }
+.btn-skip:active { background: rgba(255, 255, 255, .06); }
+.btn-skip:disabled { opacity: .4; }
+.march li.skip { background: var(--mist-2); opacity: .55; }
+.fb-points.minus { color: #FF8A8F; }
+.fb-points.skip { color: var(--mist); font-size: 34px; }
+.score.drop { animation: drop .5s; }
+@keyframes drop { 30% { transform: translateY(4px); color: #FF8A8F; } }
+.points-table small { display: block; font-size: 12px; color: #9A3B3B; font-weight: 600; }
+.answer-dots li.skip { background: var(--night-3); color: var(--mist-2); }
+.res-note { margin: -4px 0 0; color: var(--mist); font-size: 15px; }
+.res-note:empty { display: none; }
 .feedback { text-align: center; display: flex; flex-direction: column; gap: 6px; animation: screenIn .3s; }
 .feedback[hidden] { display: none; }
 .fb-points { margin: 0; font-family: var(--display); font-weight: 900; font-size: 46px; line-height: 1; color: var(--brass); }

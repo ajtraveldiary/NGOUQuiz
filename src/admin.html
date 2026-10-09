@@ -248,6 +248,10 @@ pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size:
           <label>Easy points <input name="p_easy" type="number" min="0"></label>
           <label>Medium points <input name="p_medium" type="number" min="0"></label>
           <label>Hard points <input name="p_hard" type="number" min="0"></label>
+          <label>Easy: marks lost if wrong <input name="n_easy" type="number" min="0"></label>
+          <label>Medium: marks lost if wrong <input name="n_medium" type="number" min="0"></label>
+          <label>Hard: marks lost if wrong <input name="n_hard" type="number" min="0"></label>
+          <span class="hint" style="align-self:end">Set all three to 0 to turn off negative marking. Skipping or running out of time never loses marks, and a game score never goes below 0.</span>
           <label>Streak bonus per answer in a row <input name="streakBonus" type="number" min="0"></label>
           <label>Streak bonus cap <input name="streakCap" type="number" min="0"></label>
           <label>Attempts per player (0 = unlimited) <input name="maxAttempts" type="number" min="0" max="100"></label>
@@ -465,7 +469,7 @@ easy,Kerala,How many districts does Kerala have?,12,14,15,16,B,Kerala has 14 dis
       <article class="q${q.active ? '' : ' off'}">
         <div>
           <div class="meta"><span class="lvl ${q.difficulty}">${q.difficulty}</span>${q.category ? `<span>${esc(q.category)}</span>` : ''}
-            <span>${q.attempts ? `${fmt(q.attempts)} answers, <span class="acc${q.accuracy < 35 ? ' low' : ''}">${q.accuracy}% right</span>, avg ${(q.avg_ms / 1000).toFixed(1)}s` : 'Not answered yet'}</span>
+            <span>${q.attempts ? `${fmt(q.attempts)} answers, <span class="acc${q.accuracy < 35 ? ' low' : ''}">${q.accuracy}% right</span>${q.skipped ? `, ${fmt(q.skipped)} skipped` : ''}, avg ${(q.avg_ms / 1000).toFixed(1)}s` : 'Not answered yet'}</span>
             ${q.active ? '' : '<b>Hidden</b>'}</div>
           <div class="qt">${esc(q.question)}</div>
           <ol>${q.options.map((o, i) => `<li class="${i === q.correct_index ? 'ok' : ''}">${esc(o)}</li>`).join('')}</ol>
@@ -675,8 +679,8 @@ easy,Kerala,How many districts does Kerala have?,12,14,15,16,B,Kerala has 14 dis
             ${g.status === 'void' ? `<button class="btn ghost sm" data-restore="${g.id}">Restore</button>` : ''}
           </header>
           <details><summary class="hint">Answers</summary>
-          ${(byGame[g.id] || []).map((a) => `<div class="ans"><span class="mk ${a.is_correct ? 'ok' : 'no'}">${a.is_correct ? '✓' : '✕'}</span>
-            <span>${esc(a.question)}<br><span class="hint">Chose: ${a.chosen_index == null ? 'no answer (time ran out)' : esc(a.options[a.chosen_index])}${a.is_correct ? '' : `. Right: ${esc(a.options[a.correct_index])}`}</span></span>
+          ${(byGame[g.id] || []).map((a) => `<div class="ans"><span class="mk ${a.is_correct ? 'ok' : a.skipped || a.chosen_index == null ? '' : 'no'}">${a.is_correct ? '✓' : a.skipped || a.chosen_index == null ? '–' : '✕'}</span>
+            <span>${esc(a.question)}<br><span class="hint">${a.skipped ? 'Skipped' : a.chosen_index == null ? 'No answer (time ran out)' : 'Chose: ' + esc(a.options[a.chosen_index])}${a.is_correct ? '' : `. Right: ${esc(a.options[a.correct_index])}`}</span></span>
             <span class="num">${a.points} pts<br><span class="hint">${(a.time_ms / 1000).toFixed(1)}s</span></span></div>`).join('')}
           </details>
         </div>`).join('') || '<p class="hint">No games yet.</p>'}`;
@@ -709,6 +713,7 @@ easy,Kerala,How many districts does Kerala have?,12,14,15,16,B,Kerala has 14 dis
     ['title', 'subtitle', 'tagline', 'easy', 'medium', 'hard', 'timeLimitSec', 'streakBonus', 'streakCap', 'maxAttempts'].forEach((k) => (f[k].value = s[k]));
     f.values.value = (s.values || []).join('\n');
     f.p_easy.value = s.points.easy; f.p_medium.value = s.points.medium; f.p_hard.value = s.points.hard;
+    f.n_easy.value = s.penalty.easy; f.n_medium.value = s.penalty.medium; f.n_hard.value = s.penalty.hard;
     f.open.checked = s.open; f.showExplanation.checked = s.showExplanation;
   }
   $('#setForm').addEventListener('submit', async (e) => {
@@ -719,6 +724,7 @@ easy,Kerala,How many districts does Kerala have?,12,14,15,16,B,Kerala has 14 dis
       values: f.values.value.split('\n').map((v) => v.trim()).filter(Boolean),
       easy: f.easy.value, medium: f.medium.value, hard: f.hard.value, timeLimitSec: f.timeLimitSec.value,
       points: { easy: f.p_easy.value, medium: f.p_medium.value, hard: f.p_hard.value },
+      penalty: { easy: f.n_easy.value, medium: f.n_medium.value, hard: f.n_hard.value },
       streakBonus: f.streakBonus.value, streakCap: f.streakCap.value, maxAttempts: f.maxAttempts.value,
       open: f.open.checked, showExplanation: f.showExplanation.checked,
     };

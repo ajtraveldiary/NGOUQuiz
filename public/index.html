@@ -90,6 +90,7 @@
           <li><b id="ruleCount">10 questions</b>, marching from easy to hard.</li>
           <li><b id="ruleTime">15 seconds</b> on the clock for each one. Tap an answer before it runs out.</li>
           <li><b>Answer fast, score more.</b> Every right answer earns its level points plus a speed bonus for the seconds left.</li>
+          <li id="ruleNegative"><b>Wrong answers cost marks.</b> Not sure? Tap <b>Skip</b> to move on without losing any. Running out of time costs nothing either.</li>
           <li><b>Keep a streak.</b> Two or more right in a row adds a streak bonus.</li>
           <li><b>Your best game counts.</b> Ties go to the faster player.</li>
         </ol>
@@ -124,6 +125,7 @@
         <p class="fb-explain" id="fbExplain"></p>
         <button class="btn btn-brass next-btn" id="nextBtn" type="button"><span class="fill"></span><span class="lbl">Next question</span></button>
       </div>
+      <button class="btn btn-skip" id="skipBtn" type="button">Skip question <small>no marks lost</small></button>
     </section>
 
     <!-- 5. Results -->
@@ -132,6 +134,7 @@
       <h2 id="resTitle" class="sr-only">Your result</h2>
       <p class="final-score"><span id="resScore">0</span><small>points</small></p>
       <ol class="answer-dots" id="resDots" aria-label="Your answers"></ol>
+      <p class="res-note" id="resNote"></p>
       <dl class="res-stats">
         <div><dt>Correct</dt><dd id="resCorrect">0/10</dd></div>
         <div><dt>Time</dt><dd id="resTime">0s</dd></div>

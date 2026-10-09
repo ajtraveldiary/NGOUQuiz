@@ -3,6 +3,12 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.4.0
+- Negative marking: a wrong answer loses marks (easy 25, medium 40, hard 50; editable in admin Settings, 0 turns it off). A game score never goes below 0
+- Skip button at the bottom of each question: no marks lost, the right answer is shown
+- Running out of time loses no marks
+- Results show wrong, skipped and marks lost; admin shows skips per question and in player history; games CSV adds Wrong, Skipped and Marks lost
+
 ## 1.3.0
 - Version number shown on the opening screen, admin header and `/api/health`
 

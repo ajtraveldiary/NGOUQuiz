@@ -54,7 +54,8 @@ CREATE TABLE IF NOT EXISTS answers (
   chosen_index  SMALLINT,                     -- original option index; NULL = time ran out
   is_correct    BOOLEAN NOT NULL,
   time_ms       INT NOT NULL,
-  points        INT NOT NULL,
+  points        INT NOT NULL,                 -- negative for a wrong answer (negative marking)
+  skipped       BOOLEAN NOT NULL DEFAULT false,
   answered_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (game_id, q_index)
 );
@@ -78,3 +79,4 @@ CREATE TABLE IF NOT EXISTS areas (
 ALTER TABLE players ADD COLUMN IF NOT EXISTS area TEXT;
 -- Thiruvananthapuram is now two union districts: North and South
 UPDATE players SET district = 'Thiruvananthapuram North' WHERE district = 'Thiruvananthapuram';
+ALTER TABLE answers ADD COLUMN IF NOT EXISTS skipped BOOLEAN NOT NULL DEFAULT false;
