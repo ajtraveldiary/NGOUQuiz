@@ -57,7 +57,6 @@ npm test             # end-to-end API tests on an in-memory Postgres
 | Tab | What you can do |
 |---|---|
 | Insights | Players, games, completion rate, average score; games per day; players and average score by district; right-answers spread; accuracy by level; play time of day (IST); hardest questions (check these for a wrong answer key) |
-| Districts & areas | Areas chosen by earlier players (the player card no longer asks): rename (also updates those players) or delete |
 | Questions | Search and filter; add / edit (2–6 options, Malayalam works); hide or delete (questions already answered are hidden instead, so history stays); **Download Excel**, edit, and **Import Excel / CSV** (rows keep their id, so they update the same questions) |
 | Players & scores | Search by name; filter by district; open a player to see every game and every answer; void a game to remove it from the board |
 | Settings | Questions per level; seconds per question; points; streak bonus; attempts per player; open/close the quiz; show explanations |
@@ -96,7 +95,7 @@ Over the limit, the game shows "Too many requests. Wait a minute and try again."
 
 ## Troubleshooting
 
-Open the game's address followed by `/api/health`. It reports whether the database connects, the number of questions, players and areas, and whether `APP_SECRET` and `ADMIN_PASSWORD` are set. If something is wrong it says what to fix, for example a wrong `DATABASE_URL`.
+Open the game's address followed by `/api/health`. It reports whether the database connects, the number of questions and players, and whether `APP_SECRET` and `ADMIN_PASSWORD` are set. If something is wrong it says what to fix, for example a wrong `DATABASE_URL`.
 
 ## Before launch
 

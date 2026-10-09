@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS players (
   name        TEXT NOT NULL,
   office      TEXT,                          -- not collected since v10 (kept for earlier players)
   district    TEXT NOT NULL,
-  area        TEXT,                          -- area within the district (not collected since v10)
   phone       TEXT UNIQUE,                   -- not collected since v10 (kept for earlier players)
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -68,17 +67,7 @@ CREATE TABLE IF NOT EXISTS settings (
   value  JSONB NOT NULL
 );
 
--- Areas under each district (managed from the admin page)
-CREATE TABLE IF NOT EXISTS areas (
-  id          SERIAL PRIMARY KEY,
-  district    TEXT NOT NULL,
-  name        TEXT NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (district, name)
-);
-
 -- ---- Upgrades for databases created with an earlier version (safe to re-run) ----
-ALTER TABLE players ADD COLUMN IF NOT EXISTS area TEXT;
 ALTER TABLE answers ADD COLUMN IF NOT EXISTS skipped BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE questions ADD COLUMN IF NOT EXISTS topic TEXT;
 ALTER TABLE questions ADD COLUMN IF NOT EXISTS campaign BOOLEAN NOT NULL DEFAULT false;
@@ -86,5 +75,6 @@ ALTER TABLE questions ADD COLUMN IF NOT EXISTS campaign BOOLEAN NOT NULL DEFAULT
 ALTER TABLE players ALTER COLUMN office DROP NOT NULL;
 ALTER TABLE players ALTER COLUMN phone DROP NOT NULL;
 UPDATE players SET district = 'Thiruvananthapuram' WHERE district IN ('Thiruvananthapuram North', 'Thiruvananthapuram South');
-INSERT INTO areas (district, name) SELECT 'Thiruvananthapuram', name FROM areas WHERE district IN ('Thiruvananthapuram North', 'Thiruvananthapuram South') ON CONFLICT DO NOTHING;
-DELETE FROM areas WHERE district IN ('Thiruvananthapuram North', 'Thiruvananthapuram South');
+-- v11: areas are no longer used
+ALTER TABLE players DROP COLUMN IF EXISTS area;
+DROP TABLE IF EXISTS areas;
