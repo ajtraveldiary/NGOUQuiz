@@ -245,6 +245,7 @@ button { cursor: pointer; }
 .btn-skip small { font-weight: 500; font-size: 13px; color: var(--mist-2); }
 .btn-skip:active { background: rgba(255, 255, 255, .06); }
 .btn-skip:disabled { opacity: .4; }
+.btn-skip.armed { border-style: solid; border-color: var(--brass); color: var(--brass); background: rgba(255, 255, 255, .06); }
 .march li.skip { background: var(--mist-2); opacity: .55; }
 .fb-points.minus { color: #FF8A8F; }
 .fb-points.skip { color: var(--mist); font-size: 34px; }

@@ -123,7 +123,7 @@
   const S = {
     cfg: null, me: store.get('player'), // { playerKey, player:{name,office,district,phone} }
     gameId: null, total: 10, q: null, answered: false, score: 0, streak: 0, lastLevel: null,
-    timer: { raf: 0, end: 0, lastSec: null }, nextT: 0, result: null,
+    timer: { raf: 0, end: 0, lastSec: null }, nextT: 0, skipT: 0, skipArmT: 0, skipArmed: 0, result: null,
   };
 
   // ---------- campaign (Secretariat Valayal) ----------
@@ -263,8 +263,8 @@
     $('#pointsTable').innerHTML = ['easy', 'medium', 'hard'].filter((l) => (c.levels || { easy: 1, medium: 1, hard: 1 })[l] > 0)
       .map((l) => `<div class="${l}"><b>+${p[l]}</b><span>${LEVEL_NAME[l]}</span>${pen[l] ? `<small>−${pen[l]} if wrong</small>` : ''}</div>`).join('');
     $('#ruleNegative').innerHTML = negative
-      ? '<b>Wrong answers cost marks.</b> Not sure? Tap <b>Skip</b> to move on without losing any. Running out of time costs nothing either.'
-      : '<b>Not sure?</b> Tap <b>Skip</b> to move on.';
+      ? '<b>Wrong answers cost marks.</b> Not sure? Tap <b>Skip</b> twice to move on without losing any. Running out of time costs nothing either.'
+      : '<b>Not sure?</b> Tap <b>Skip</b> twice to move on.';
     const left = Math.round(t * 0.6), speed = Math.round(p.medium * left / t);
     $('#ruleExample').textContent = `Example: a medium question answered with ${left} of ${t} seconds left earns ${p.medium} + ${speed} speed bonus = ${p.medium + speed}. Get the next one right too and add a ${c.streakBonus ?? 25}-point streak bonus.`;
     show('rules');
@@ -345,7 +345,9 @@
     box.innerHTML = q.options.map((o, i) =>
       `<button class="opt" type="button" data-i="${i}"><span class="key">${'ABCDEF'[i]}</span><span class="txt">${esc(o)}</span></button>`).join('');
     $('#feedback').hidden = true;
-    const sk = $('#skipBtn'); sk.hidden = false; sk.disabled = false;
+    // Skip stays locked briefly so a tap meant for "Next question" can't land on it
+    const sk = $('#skipBtn'); sk.hidden = false; sk.disabled = true; disarmSkip();
+    clearTimeout(S.skipT); S.skipT = setTimeout(() => { if (!S.answered) sk.disabled = false; }, 1200);
     startTimer(q.remainingMs, q.limitMs);
   }
 
@@ -366,11 +368,23 @@
     };
     S.timer.raf = requestAnimationFrame(frame);
   }
+  // Skip needs two taps: the first arms it, the second (not a fast double-tap) skips
+  function armSkip() {
+    const sk = $('#skipBtn');
+    S.skipArmed = performance.now(); sk.classList.add('armed');
+    sk.innerHTML = 'Tap again to skip <small>no marks lost</small>'; buzz(15);
+    clearTimeout(S.skipArmT); S.skipArmT = setTimeout(disarmSkip, 3000);
+  }
+  function disarmSkip() {
+    clearTimeout(S.skipArmT); S.skipArmed = 0;
+    const sk = $('#skipBtn'); sk.classList.remove('armed');
+    sk.innerHTML = 'Skip question <small>no marks lost</small>';
+  }
   function stopTimer() { cancelAnimationFrame(S.timer.raf); $('#timer').classList.remove('low'); }
 
   async function submit(choice, attempt = 0) {
     if (S.answered && attempt === 0) return;
-    S.answered = true; stopTimer();
+    S.answered = true; stopTimer(); clearTimeout(S.skipT); disarmSkip();
     const box = $('#options'), btns = [...box.children];
     box.classList.add('locked');
     btns.forEach((b) => { b.disabled = true; });
@@ -560,7 +574,11 @@
     submit(Number(b.dataset.i));
   });
   $('#nextBtn').addEventListener('click', () => { if ($('#nextBtn .lbl').textContent === 'Try again') { $('#feedback').hidden = true; return loadNext(); } goNext(); });
-  $('#skipBtn').addEventListener('click', () => { if (!S.answered) submit('skip'); });
+  $('#skipBtn').addEventListener('click', () => {
+    if (S.answered) return;
+    if (!S.skipArmed) return armSkip();
+    if (performance.now() - S.skipArmed > 400) submit('skip');
+  });
   $('#tabAll').addEventListener('click', () => setTab('all'));
   $('#tabDistrict').addEventListener('click', () => setTab('district'));
   $('#shareBtn').addEventListener('click', share);

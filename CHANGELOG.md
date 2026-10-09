@@ -3,6 +3,12 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.4
+- Fix: the Skip button was easy to press by accident during a game
+- Skip now takes two taps: the first turns it into "Tap again to skip" (it resets after 3 seconds); a fast double-tap doesn't count
+- Skip is locked for the first moment of each question, so a tap meant for "Next question" can't land on it
+- Rules screen says "Tap Skip twice"
+
 ## 1.6.3
 - Fix: after an update, a returning player's browser could mix the old cached page with the new code, and the site stopped loading (no districts, no scores)
 - The page is never cached; app.js and style.css links carry the version (`?v=1.6.3`), so every update loads matching files
