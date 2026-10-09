@@ -21,7 +21,7 @@ const env = {
     tx: (list) => pg.transaction(async (x) => { const out = []; for (const [q, p = []] of list) out.push((await x.query(q, p)).rows); return out; }),
   },
 };
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.txt': 'text/plain' };
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.png': 'image/png', '.txt': 'text/plain' };
 const port = Number(process.env.PORT) || 8787;
 
 createServer(async (req, res) => {

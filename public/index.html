@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#2B0710">
-  <meta name="app-version" content="1.6.3">
+  <meta name="app-version" content="1.6.8">
   <title>Arivu Quiz · Kerala NGO Union</title>
   <meta name="description" content="Kerala NGO Union quiz for the Secretariat Valayal, 21 November 2026. Know the facts, beat the clock, climb the Kerala leaderboard.">
   <meta property="og:title" content="Arivu Quiz · Kerala NGO Union">
@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anek+Malayalam:wght@400;500;600;700;800&family=Big+Shoulders+Display:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=1.6.3">
+  <link rel="stylesheet" href="/style.css?v=1.6.8">
 </head>
 <body>
   <canvas id="confetti" aria-hidden="true"></canvas>
@@ -31,9 +31,9 @@
           <img class="flag-logo" src="/logo.png" alt="Kerala NGO Union torch emblem" width="344" height="360">
         </div>
       </div>
-      <p class="org" id="orgName">Kerala NGO Union</p>
-      <h1 class="game-title" id="gameTitle"><span>Arivu</span><span>Quiz</span></h1>
-      <p class="tagline" id="tagline">Know your rights. Serve the people.</p>
+      <p class="org">Kerala NGO Union <span class="presents">presents</span></p>
+      <h1 class="game-title" id="gameTitle"><img class="title-logo" src="/arivu-title.webp" alt="Arivu" width="800" height="231"><span>Quiz</span></h1>
+      <p class="tagline">Know the facts. Defend our rights.</p>
       <div class="ticket" id="campaignTicket" hidden>
         <div class="ticket-count"><b id="tkBig">43</b><span id="tkUnit">days to go</span></div>
         <div class="ticket-body">
@@ -41,7 +41,7 @@
           <p class="ticket-meta" id="tkMeta"></p>
         </div>
       </div>
-      <ul class="values" id="values" aria-label="Our values"></ul>
+      <ul class="values" aria-label="Our values"><li>Solidarity</li><li>Democracy</li><li>Secularism</li><li>People-centred public service</li></ul>
       <div class="splash-stats" id="splashStats" hidden></div>
       <div class="splash-actions">
         <button class="btn btn-brass btn-big" id="playBtn" type="button">Play now</button>
@@ -98,16 +98,13 @@
       <div class="card rules-card">
         <p class="welcome" id="welcomeLine">Welcome, comrade.</p>
         <ol class="rules">
-          <li><b id="ruleCount">10 questions</b>, marching from easy to hard.</li>
-          <li><b id="ruleTime">15 seconds</b> on the clock for each one. Tap an answer before it runs out.</li>
-          <li><b>Answer fast, score more.</b> Every right answer earns its level points plus a speed bonus for the seconds left.</li>
-          <li id="ruleNegative"><b>Wrong answers cost marks.</b> Not sure? Tap <b>Skip</b> to move on without losing any. Running out of time costs nothing either.</li>
-          <li id="ruleBonus" hidden><b>Bonus question</b> after the last one, on the <span id="ruleBonusName">Secretariat Valayal</span>. Extra points if right, and a wrong answer costs nothing.</li>
-          <li><b>Keep a streak.</b> Two or more right in a row adds a streak bonus.</li>
-          <li><b>Your best game counts.</b> Ties go to the faster player.</li>
+          <li><span id="ruleCount">10</span> ചോദ്യങ്ങൾ, ഓരോന്നിനും <span id="ruleTime">15</span> സെക്കൻഡ്.</li>
+          <li>വേഗത്തിൽ ഉത്തരം നൽകിയാൽ കൂടുതൽ പോയിന്റ്.</li>
+          <li>തുടർച്ചയായ ശരിയുത്തരങ്ങൾക്ക് അധിക പോയിന്റ്.</li>
+          <li id="ruleNegative">തെറ്റായ ഉത്തരത്തിന് നെഗറ്റീവ് മാർക്ക്. Skip ചെയ്താൽ പോയിന്റ് നഷ്ടപ്പെടില്ല.</li>
+          <li id="ruleAttempts">ഒരാൾക്ക് ഒന്നിൽ കൂടുതൽ തവണ കളിക്കാം, മികച്ച സ്കോർ ലീഡർബോർഡിൽ.</li>
         </ol>
         <div class="points-table" id="pointsTable"></div>
-        <p class="example" id="ruleExample"></p>
       </div>
       <button class="btn btn-brass btn-big" id="startBtn" type="button">I'm ready, start</button>
     </section>
@@ -203,6 +200,6 @@
   </div>
   <div class="toast" id="toast" role="status" hidden></div>
 
-  <script src="/app.js?v=1.6.3"></script>
+  <script src="/app.js?v=1.6.8"></script>
 </body>
 </html>

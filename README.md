@@ -10,6 +10,7 @@ Mobile-first quiz game on **Cloudflare Workers + Neon Postgres**.
   - Streak bonus: +25 for each answer in a row after the first, capped at +100
   - Wrong answer: negative marks (easy −25, medium −40, hard −50, editable in Settings). A game score never goes below 0
   - Skip button or time out: 0, no marks lost
+  - Skip takes two taps (the first shows "Tap again to skip") and stays locked for a moment as each question appears, so it isn't pressed by accident
   - Wrong, skipped or timed out: the streak resets and the right answer is shown in green
 - Timing is measured **on the server**, so the score can't be faked from the browser. Refreshing the page doesn't reset the clock.
 - Leaderboard ranks each player's **best** game; ties go to the faster total time. Kerala-wide and per-district boards.
@@ -40,7 +41,7 @@ scripts/           local server, API tests, demo build
    npx wrangler secret put ADMIN_PASSWORD   # admin page password
    ```
 3. In `wrangler.toml`, change `ADMIN_PATH` to a path only your team knows (e.g. `ngou-desk-4831`).
-4. `npm run deploy`. The game is at `https://ngo-union-quiz.<your-subdomain>.workers.dev/`, the admin page at `/<ADMIN_PATH>`.
+4. `npm run deploy`. When it finishes, it prints the game's web address (also shown in the Cloudflare dashboard under *Workers & Pages → ngo-union-quiz*). The admin page is that address followed by `/` and your `ADMIN_PATH`.
 5. Optional: Workers → your worker → *Settings → Domains & Routes* to add `quiz.keralangounion.in`.
 
 ## Try it locally without Neon
@@ -59,7 +60,7 @@ npm test             # end-to-end API tests on an in-memory Postgres
 | Districts & areas | Add areas under each of the 15 districts (paste a comma-separated list), rename (also updates players who chose it) or delete. A district with no areas skips the area question |
 | Questions | Search and filter; add / edit (2–6 options, Malayalam works); hide or delete (questions already answered are hidden instead, so history stays); import CSV |
 | Players & scores | Search by name, office or phone; filter by district; open a player to see every game and every answer; void a game to remove it from the board |
-| Settings | Title, organisation line, tagline, values shown on the welcome screen; questions per level; seconds per question; points; streak bonus; attempts per player; open/close the quiz; show explanations |
+| Settings | Questions per level; seconds per question; points; streak bonus; attempts per player; open/close the quiz; show explanations |
 
 **CSV format** for importing questions (UTF‑8):
 
@@ -87,7 +88,7 @@ The version number shows in small text on the opening screen, in the admin heade
 
 ## Troubleshooting
 
-Open `https://<your-worker>/api/health`. It reports whether the database connects, the number of questions, players and areas, and whether `APP_SECRET` and `ADMIN_PASSWORD` are set. If something is wrong it says what to fix, for example a wrong `DATABASE_URL`.
+Open the game's address followed by `/api/health`. It reports whether the database connects, the number of questions, players and areas, and whether `APP_SECRET` and `ADMIN_PASSWORD` are set. If something is wrong it says what to fix, for example a wrong `DATABASE_URL`.
 
 ## Before launch
 

@@ -3,6 +3,26 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.8
+- Opening screen: "Kerala NGO Union presents"
+- The opening screen's title, organisation line, tagline and values are fixed in the page; they no longer come from the database, and their fields are removed from admin Settings
+
+## 1.6.7
+- Opening screen: "Arivu" in the title is now the Malayalam logotype (`public/arivu-title.webp`); "Quiz" stays below it
+
+## 1.6.6
+- How to play: the English "Example: …" box is removed
+
+## 1.6.5
+- Game rules rewritten in short Malayalam (5 lines); the numbers still follow Settings
+- The negative-marks line is hidden when negative marking is off; the replay line follows "Attempts per player"
+
+## 1.6.4
+- Fix: the Skip button was easy to press by accident during a game
+- Skip now takes two taps: the first turns it into "Tap again to skip" (it resets after 3 seconds); a fast double-tap doesn't count
+- Skip is locked for the first moment of each question, so a tap meant for "Next question" can't land on it
+- Rules screen says "Tap Skip twice"
+
 ## 1.6.3
 - Fix: after an update, a returning player's browser could mix the old cached page with the new code, and the site stopped loading (no districts, no scores)
 - The page is never cached; app.js and style.css links carry the version (`?v=1.6.3`), so every update loads matching files

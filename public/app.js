@@ -123,7 +123,7 @@
   const S = {
     cfg: null, me: store.get('player'), // { playerKey, player:{name,office,district,phone} }
     gameId: null, total: 10, q: null, answered: false, score: 0, streak: 0, lastLevel: null,
-    timer: { raf: 0, end: 0, lastSec: null }, nextT: 0, result: null,
+    timer: { raf: 0, end: 0, lastSec: null }, nextT: 0, skipT: 0, skipArmT: 0, skipArmed: 0, result: null,
   };
 
   // ---------- campaign (Secretariat Valayal) ----------
@@ -176,16 +176,8 @@
         return;
       }
     }
-    const c = S.cfg || { title: 'Arivu Quiz', values: [], districts: [], areas: {}, totalQuestions: 10, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
+    const c = S.cfg || { title: 'Arivu Quiz', districts: [], areas: {}, totalQuestions: 10, timeLimitSec: 15, points: { easy: 100, medium: 150, hard: 200 }, streakBonus: 25, streakCap: 100 };
     S.total = c.totalQuestions;
-    const words = String(c.title).trim().split(/\s+/);
-    const first = words.length > 1 ? words.slice(0, Math.ceil(words.length / 2)).join(' ') : words[0];
-    const second = words.length > 1 ? words.slice(Math.ceil(words.length / 2)).join(' ') : '';
-    $('#gameTitle').innerHTML = `<span>${esc(first)}</span>${second ? `<span>${esc(second)}</span>` : ''}`;
-    document.title = c.title + (c.subtitle ? ' | ' + c.subtitle : '');
-    if (c.subtitle) $('#orgName').textContent = c.subtitle;
-    if (c.tagline) $('#tagline').textContent = c.tagline;
-    $('#values').innerHTML = (c.values || []).map((v) => `<li>${esc(v)}</li>`).join('');
     try { renderCampaign(); } catch (e) { console.error('campaign', e); }
     const opts = (c.districts || []).map((d) => `<option>${esc(d)}</option>`).join('');
     $('#regForm [name=district]').insertAdjacentHTML('beforeend', opts);
@@ -254,19 +246,16 @@
     const c = S.cfg || {}, p = c.points || { easy: 100, medium: 150, hard: 200 }, t = c.timeLimitSec || 15;
     const first = (S.me?.player?.name || '').split(' ')[0];
     $('#welcomeLine').textContent = first ? (returning ? `Welcome back, ${first}.` : `Welcome, ${first}.`) : 'Welcome.';
-    $('#ruleCount').textContent = `${c.totalQuestions || 10} questions` + (c.bonusQuestion ? ' plus a bonus' : '');
-    $('#ruleBonus').hidden = !c.bonusQuestion;
-    if (c.campaign) $('#ruleBonusName').textContent = c.campaign.name;
-    $('#ruleTime').textContent = `${t} seconds`;
+    $('#ruleCount').textContent = c.totalQuestions || 10;
+    $('#ruleTime').textContent = t;
+    const tries = c.maxAttempts || 0;
+    $('#ruleAttempts').textContent = tries === 1 ? 'ഒരു തവണ മാത്രം കളിക്കാം.'
+      : `ഒരാൾക്ക് ${tries > 1 ? tries + ' തവണ' : 'ഒന്നിൽ കൂടുതൽ തവണ'} കളിക്കാം, മികച്ച സ്കോർ ലീഡർബോർഡിൽ.`;
     const pen = c.penalty || { easy: 0, medium: 0, hard: 0 };
     const negative = ['easy', 'medium', 'hard'].some((l) => pen[l] > 0);
     $('#pointsTable').innerHTML = ['easy', 'medium', 'hard'].filter((l) => (c.levels || { easy: 1, medium: 1, hard: 1 })[l] > 0)
       .map((l) => `<div class="${l}"><b>+${p[l]}</b><span>${LEVEL_NAME[l]}</span>${pen[l] ? `<small>−${pen[l]} if wrong</small>` : ''}</div>`).join('');
-    $('#ruleNegative').innerHTML = negative
-      ? '<b>Wrong answers cost marks.</b> Not sure? Tap <b>Skip</b> to move on without losing any. Running out of time costs nothing either.'
-      : '<b>Not sure?</b> Tap <b>Skip</b> to move on.';
-    const left = Math.round(t * 0.6), speed = Math.round(p.medium * left / t);
-    $('#ruleExample').textContent = `Example: a medium question answered with ${left} of ${t} seconds left earns ${p.medium} + ${speed} speed bonus = ${p.medium + speed}. Get the next one right too and add a ${c.streakBonus ?? 25}-point streak bonus.`;
+    $('#ruleNegative').hidden = !negative;
     show('rules');
   }
 
@@ -345,7 +334,9 @@
     box.innerHTML = q.options.map((o, i) =>
       `<button class="opt" type="button" data-i="${i}"><span class="key">${'ABCDEF'[i]}</span><span class="txt">${esc(o)}</span></button>`).join('');
     $('#feedback').hidden = true;
-    const sk = $('#skipBtn'); sk.hidden = false; sk.disabled = false;
+    // Skip stays locked briefly so a tap meant for "Next question" can't land on it
+    const sk = $('#skipBtn'); sk.hidden = false; sk.disabled = true; disarmSkip();
+    clearTimeout(S.skipT); S.skipT = setTimeout(() => { if (!S.answered) sk.disabled = false; }, 1200);
     startTimer(q.remainingMs, q.limitMs);
   }
 
@@ -366,11 +357,23 @@
     };
     S.timer.raf = requestAnimationFrame(frame);
   }
+  // Skip needs two taps: the first arms it, the second (not a fast double-tap) skips
+  function armSkip() {
+    const sk = $('#skipBtn');
+    S.skipArmed = performance.now(); sk.classList.add('armed');
+    sk.innerHTML = 'Tap again to skip <small>no marks lost</small>'; buzz(15);
+    clearTimeout(S.skipArmT); S.skipArmT = setTimeout(disarmSkip, 3000);
+  }
+  function disarmSkip() {
+    clearTimeout(S.skipArmT); S.skipArmed = 0;
+    const sk = $('#skipBtn'); sk.classList.remove('armed');
+    sk.innerHTML = 'Skip question <small>no marks lost</small>';
+  }
   function stopTimer() { cancelAnimationFrame(S.timer.raf); $('#timer').classList.remove('low'); }
 
   async function submit(choice, attempt = 0) {
     if (S.answered && attempt === 0) return;
-    S.answered = true; stopTimer();
+    S.answered = true; stopTimer(); clearTimeout(S.skipT); disarmSkip();
     const box = $('#options'), btns = [...box.children];
     box.classList.add('locked');
     btns.forEach((b) => { b.disabled = true; });
@@ -560,7 +563,11 @@
     submit(Number(b.dataset.i));
   });
   $('#nextBtn').addEventListener('click', () => { if ($('#nextBtn .lbl').textContent === 'Try again') { $('#feedback').hidden = true; return loadNext(); } goNext(); });
-  $('#skipBtn').addEventListener('click', () => { if (!S.answered) submit('skip'); });
+  $('#skipBtn').addEventListener('click', () => {
+    if (S.answered) return;
+    if (!S.skipArmed) return armSkip();
+    if (performance.now() - S.skipArmed > 400) submit('skip');
+  });
   $('#tabAll').addEventListener('click', () => setTab('all'));
   $('#tabDistrict').addEventListener('click', () => setTab('district'));
   $('#shareBtn').addEventListener('click', share);
