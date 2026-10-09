@@ -86,6 +86,23 @@ On its first request the Worker creates any missing tables, upgrades older datab
 
 The version number shows in small text on the opening screen, in the admin header and at `/api/health`. It comes from `version` in `package.json`; see `CHANGELOG.md`. After changing it, run `npm run stamp` so `public/index.html` and its file links carry the same version (the tests check this); an old page left open in a browser then reloads itself once.
 
+## Protection against bots
+
+Every request is checked against a per-minute limit before the database is touched:
+
+| What | Limit per minute |
+|---|---|
+| Opening-screen data (settings, leaderboard) | 120 per internet address |
+| Player cards | 20 per internet address |
+| Game requests | 600 per internet address |
+| New games | 10 per player |
+| Questions, answers, results | 90 per player |
+| Admin page | 300 per internet address (plus 8 wrong passwords per 15 minutes) |
+
+Over the limit, the game shows "Too many requests. Wait a minute and try again." Per-address limits are generous on purpose: many phones on one mobile network, or one office, can share an address. The limits live in `wrangler.toml` (`[[ratelimits]]`, Cloudflare Workers Rate Limiting) and in `LIMITS` in `src/index.js` (used if the Cloudflare limits are missing); keep the two in step. Changes sent from other websites are refused.
+
+`npm run load 150` plays 150 full games at once against an in-memory database and checks every stored score.
+
 ## Troubleshooting
 
 Open the game's address followed by `/api/health`. It reports whether the database connects, the number of questions, players and areas, and whether `APP_SECRET` and `ADMIN_PASSWORD` are set. If something is wrong it says what to fix, for example a wrong `DATABASE_URL`.

@@ -17,7 +17,7 @@ html { background: var(--night); }
 .screen { padding-bottom: calc(44px + var(--safe-b)); }
 </style>
 ${body.replace('<link rel="icon" href="/favicon.svg" type="image/svg+xml">', '')
-  .replace('src="/logo.png"', `src="data:image/png;base64,${readFileSync(new URL('../public/logo.png', import.meta.url)).toString('base64')}"`)
+  .replace('src="/logo.webp"', `src="data:image/webp;base64,${readFileSync(new URL('../public/logo.webp', import.meta.url)).toString('base64')}"`)
   .replace('src="/arivu-title.webp"', `src="data:image/webp;base64,${readFileSync(new URL('../public/arivu-title.webp', import.meta.url)).toString('base64')}"`)}
 <p class="demo-note">Demo with sample leaderboard players. Your scores stay on this device.</p>
 <script>const QUESTIONS = ${JSON.stringify(qs)}; const APP_VERSION = ${JSON.stringify(JSON.parse(r('package.json')).version)};</script>

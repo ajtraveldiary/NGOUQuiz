@@ -395,4 +395,24 @@ assert.match((await callEnv(noUrl, 'GET', '/api/config')).body.error, /DATABASE_
 assert.match((await callEnv({ ...noUrl, DATABASE_URL: 'mysql://x' }, 'GET', '/api/health')).body.error, /should start with postgresql/);
 console.log('✓ auto setup: empty database, old database upgrade, clear config errors');
 console.log('✓ admin: stats, question CRUD, import, players, void/restore, exports, settings');
+// Rate limits (in-Worker counter here; Cloudflare's binding when deployed) and requests from other sites
+{
+  const at = (ip) => ({ 'cf-connecting-ip': ip });
+  let r;
+  for (let i = 0; i < 121; i++) r = await call('GET', '/api/config', undefined, at('203.0.113.1'));
+  assert.equal(r.status, 429, 'reads are limited per address');
+  assert.equal(r.headers.get('retry-after'), '60');
+  assert.equal((await call('GET', '/api/config', undefined, at('203.0.113.2'))).status, 200, 'other addresses are not affected');
+  for (let i = 0; i < 21; i++) r = await call('POST', '/api/register', { name: 'Bot', office: 'DHS', district: 'Kottayam', phone: String(9100000000 + i) }, at('203.0.113.3'));
+  assert.equal(r.status, 429, 'player cards are limited per address');
+  const bot = ok(await call('POST', '/api/register', { name: 'Bot', office: 'DHS', district: 'Kottayam', phone: '9100000099' }, at('203.0.113.4')), 'bot reg');
+  for (let i = 0; i < 11; i++) r = await call('POST', '/api/game/start', { playerKey: bot.playerKey }, at('203.0.113.' + (10 + i)));
+  assert.equal(r.status, 429, 'new games are limited per player, whatever the address');
+  const other = { name: 'Elsewhere', office: 'DHS', district: 'Kottayam', phone: '9100000098' };
+  assert.equal((await call('POST', '/api/register', other, { origin: 'https://evil.example' })).status, 403, 'other sites cannot post');
+  assert.equal((await call('POST', '/api/register', other, { origin: 'https://quiz.test' })).status, 200, 'the game itself can');
+  const denied = await worker.fetch(new Request('https://quiz.test/api/config'), { ...env, RL_READ: { limit: async () => ({ success: false }) } }, {});
+  assert.equal(denied.status, 429, 'uses the Cloudflare binding when present');
+  console.log('✓ rate limits per address and per player, Retry-After, other sites blocked, Cloudflare binding used');
+}
 console.log('\nAll API tests passed.');
