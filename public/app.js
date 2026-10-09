@@ -254,17 +254,16 @@
     const c = S.cfg || {}, p = c.points || { easy: 100, medium: 150, hard: 200 }, t = c.timeLimitSec || 15;
     const first = (S.me?.player?.name || '').split(' ')[0];
     $('#welcomeLine').textContent = first ? (returning ? `Welcome back, ${first}.` : `Welcome, ${first}.`) : 'Welcome.';
-    $('#ruleCount').textContent = `${c.totalQuestions || 10} questions` + (c.bonusQuestion ? ' plus a bonus' : '');
-    $('#ruleBonus').hidden = !c.bonusQuestion;
-    if (c.campaign) $('#ruleBonusName').textContent = c.campaign.name;
-    $('#ruleTime').textContent = `${t} seconds`;
+    $('#ruleCount').textContent = c.totalQuestions || 10;
+    $('#ruleTime').textContent = t;
+    const tries = c.maxAttempts || 0;
+    $('#ruleAttempts').textContent = tries === 1 ? 'ഒരു തവണ മാത്രം കളിക്കാം.'
+      : `ഒരാൾക്ക് ${tries > 1 ? tries + ' തവണ' : 'ഒന്നിൽ കൂടുതൽ തവണ'} കളിക്കാം, മികച്ച സ്കോർ ലീഡർബോർഡിൽ.`;
     const pen = c.penalty || { easy: 0, medium: 0, hard: 0 };
     const negative = ['easy', 'medium', 'hard'].some((l) => pen[l] > 0);
     $('#pointsTable').innerHTML = ['easy', 'medium', 'hard'].filter((l) => (c.levels || { easy: 1, medium: 1, hard: 1 })[l] > 0)
       .map((l) => `<div class="${l}"><b>+${p[l]}</b><span>${LEVEL_NAME[l]}</span>${pen[l] ? `<small>−${pen[l]} if wrong</small>` : ''}</div>`).join('');
-    $('#ruleNegative').innerHTML = negative
-      ? '<b>Wrong answers cost marks.</b> Not sure? Tap <b>Skip</b> twice to move on without losing any. Running out of time costs nothing either.'
-      : '<b>Not sure?</b> Tap <b>Skip</b> twice to move on.';
+    $('#ruleNegative').hidden = !negative;
     const left = Math.round(t * 0.6), speed = Math.round(p.medium * left / t);
     $('#ruleExample').textContent = `Example: a medium question answered with ${left} of ${t} seconds left earns ${p.medium} + ${speed} speed bonus = ${p.medium + speed}. Get the next one right too and add a ${c.streakBonus ?? 25}-point streak bonus.`;
     show('rules');

@@ -3,6 +3,10 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 1.6.5
+- Game rules rewritten in short Malayalam (5 lines); the numbers still follow Settings
+- The negative-marks line is hidden when negative marking is off; the replay line follows "Attempts per player"
+
 ## 1.6.4
 - Fix: the Skip button was easy to press by accident during a game
 - Skip now takes two taps: the first turns it into "Tap again to skip" (it resets after 3 seconds); a fast double-tap doesn't count
