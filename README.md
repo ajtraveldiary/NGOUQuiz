@@ -41,7 +41,7 @@ scripts/           local server, API tests, demo build
    npx wrangler secret put ADMIN_PASSWORD   # admin page password
    ```
 3. In `wrangler.toml`, change `ADMIN_PATH` to a path only your team knows (e.g. `ngou-desk-4831`).
-4. `npm run deploy`. When it finishes, it prints the game's web address (also shown in the Cloudflare dashboard under *Workers & Pages → ngo-union-quiz*). The admin page is that address followed by `/` and your `ADMIN_PATH`.
+4. `npm run deploy`. When it finishes, it prints the game's web address (also shown in the Cloudflare dashboard under *Workers & Pages → ngouquiz*). The admin page is that address followed by `/` and your `ADMIN_PATH`.
 5. Optional: Workers → your worker → *Settings → Domains & Routes* to add `quiz.keralangounion.in`.
 
 ## Try it locally without Neon

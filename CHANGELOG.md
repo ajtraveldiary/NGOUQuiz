@@ -5,6 +5,7 @@ Bump `version` in `package.json` with every pushed change.
 
 ## 1.6.9
 - Opening screen tagline: "നമുക്ക് അറിവ് നേടാം. അധികാരികൾ തിരിച്ചറിവ് നേടട്ടെ.."
+- `wrangler.toml`: worker name is `ngouquiz`, matching the worker on Cloudflare (Workers Builds)
 
 ## 1.6.8
 - Opening screen: "Kerala NGO Union presents"
