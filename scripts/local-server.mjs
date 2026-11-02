@@ -1,5 +1,5 @@
 // Run the whole app locally with an in-memory Postgres (no Neon, no Cloudflare account needed).
-// Usage: npm run local   → http://localhost:8787  (admin: /admin-desk, password "admin")
+// Usage: npm run local   → http://localhost:8787  (admin: /union-control-room, password "admin")
 import { build } from 'esbuild';
 import { PGlite } from '@electric-sql/pglite';
 import { createServer } from 'node:http';
@@ -15,7 +15,7 @@ const worker = (await import(root + '.test-build/worker.mjs?' + Date.now())).def
 const pg = new PGlite();
 // tables and starter questions are created by the Worker on first request
 const env = {
-  APP_SECRET: 'local-dev-secret-change-me-0123456789', ADMIN_PASSWORD: 'admin', ADMIN_PATH: 'admin-desk',
+  APP_SECRET: 'local-dev-secret-change-me-0123456789', ADMIN_PASSWORD: 'admin', ADMIN_PATH: 'union-control-room',
   __db: {
     q: async (t, p = []) => (await pg.query(t, p)).rows,
     tx: (list) => pg.transaction(async (x) => { const out = []; for (const [q, p = []] of list) out.push((await x.query(q, p)).rows); return out; }),

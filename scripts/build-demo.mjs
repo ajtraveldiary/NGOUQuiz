@@ -5,7 +5,7 @@ const html = r('public/index.html');
 const body = html.slice(html.indexOf('<body>') + 6, html.indexOf('<script src="/app.js'));
 const qs = JSON.parse(r('db/seed-questions.json'));
 const out = `<title>Arivu Quiz</title>
-<meta name="theme-color" content="#0C3A37">
+<meta name="theme-color" content="#2B0710">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anek+Malayalam:wght@400;500;600;700;800&family=Big+Shoulders+Display:wght@800;900&display=swap" rel="stylesheet">
@@ -13,10 +13,11 @@ const out = `<title>Arivu Quiz</title>
 ${r('public/style.css')}
 :root { color-scheme: dark; }
 html { background: var(--night); }
-.demo-note { position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; text-align: center; font-size: 12px; padding: 4px 12px calc(4px + env(safe-area-inset-bottom, 0px)); background: rgba(9, 44, 41, .9); color: var(--mist-2); }
+.demo-note { position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; text-align: center; font-size: 12px; padding: 4px 12px calc(4px + env(safe-area-inset-bottom, 0px)); background: rgba(43, 7, 16, .9); color: var(--mist-2); }
 .screen { padding-bottom: calc(44px + var(--safe-b)); }
 </style>
 ${body.replace('<link rel="icon" href="/favicon.svg" type="image/svg+xml">', '')
+  .replace('src="/logo.webp"', `src="data:image/webp;base64,${readFileSync(new URL('../public/logo.webp', import.meta.url)).toString('base64')}"`)
   .replace('src="/arivu-title.webp"', `src="data:image/webp;base64,${readFileSync(new URL('../public/arivu-title.webp', import.meta.url)).toString('base64')}"`)}
 <p class="demo-note">Demo with sample leaderboard players. Your scores stay on this device.</p>
 <script>const QUESTIONS = ${JSON.stringify(qs)}; const APP_VERSION = ${JSON.stringify(JSON.parse(r('package.json')).version)};</script>

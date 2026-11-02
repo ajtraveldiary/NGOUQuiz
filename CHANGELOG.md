@@ -3,6 +3,12 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 2.6.0
+- Back to the 1.9.1 quiz: every file is as it was in 1.9.1 (commit 9496849), so 2.0.0–2.5.1 are undone — the Kerala NGO Union branding, bonus question, phone/office/area player card, districts & areas page and the earlier colours return
+- Database version 12 puts back what 2.x removed from an existing database: the `areas` table and the players' `area` column, Thiruvananthapuram North/South, the questions hidden in 2.0.0 and the campaign flag on the starter bonus questions
+- Not recoverable by the upgrade: the players deleted in 2.1.0, the phone numbers and offices erased in 2.0.0, the areas that were in the admin page, and the campaign flag on bonus questions added by hand. Players who joined during 2.x keep their saved player card and scores and show on the leaderboard without an office
+- Local `wrangler dev` starts again: the Worker no longer exports plain values (`VERSION`, `DISTRICTS`, `DEFAULT_SETTINGS`), which the Workers runtime refuses as entrypoints
+
 ## 2.5.1
 - Opening screen tagline is now "അവകാശം അറിയണം. / ചരിത്രം മറക്കരുത്." The link preview picture keeps the old tagline
 

@@ -1,4 +1,4 @@
-// Arivu Quiz — Cloudflare Worker (API + hidden admin page)
+// Kerala NGO Union Quiz — Cloudflare Worker (API + hidden admin page)
 // Static game files are served from /public by Workers Static Assets.
 import { neon } from '@neondatabase/serverless';
 import ADMIN_HTML from './admin.html';
@@ -6,16 +6,19 @@ import SCHEMA_SQL from '../db/schema.sql';
 import SEED_QUESTIONS from '../db/seed-questions.json';
 import PKG from '../package.json';
 
-export const VERSION = PKG.version; // bump in package.json with every pushed change
+const VERSION = PKG.version; // bump in package.json with every pushed change
 
-export const DISTRICTS = [
-  'Thiruvananthapuram', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam',
+const DISTRICTS = [
+  'Thiruvananthapuram North', 'Thiruvananthapuram South', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam',
   'Thrissur', 'Palakkad', 'Malappuram', 'Kozhikode', 'Wayanad', 'Kannur', 'Kasaragod',
 ];
 const LEVELS = ['easy', 'medium', 'hard'];
 
-export const DEFAULT_SETTINGS = {
+const DEFAULT_SETTINGS = {
   title: 'Arivu Quiz',
+  subtitle: 'Kerala NGO Union',
+  tagline: 'Know the facts. Defend our rights.',
+  values: ['Solidarity', 'Democracy', 'Secularism', 'People-centred public service'],
   easy: 4, medium: 4, hard: 2,
   timeLimitSec: 15,
   points: { easy: 100, medium: 150, hard: 200 },
@@ -25,6 +28,7 @@ export const DEFAULT_SETTINGS = {
   maxAttempts: 0,          // 0 = unlimited replays (best score counts)
   open: true,              // false = quiz closed to new games
   showExplanation: true,
+  bonusQuestion: true,     // after the regular questions, one bonus question about the campaign programme (no negative marks)
   // share of each question category among the regular questions (percent); difficulty levels are matched as closely as possible
   categoryMix: [
     { name: 'Political', percent: 60 },
@@ -32,26 +36,25 @@ export const DEFAULT_SETTINGS = {
     { name: 'KSR & Govt rules', percent: 20 },
     { name: 'General political', percent: 10 },
   ],
+  campaign: {
+    show: true,
+    name: 'Secretariat Valayal',
+    nameMl: 'സെക്രട്ടേറിയറ്റ് വളയൽ',
+    date: '2026-11-21',
+    place: 'Thiruvananthapuram',
+    organiser: 'Action Council of State Employees & Teachers',
+    line: 'Over 25,000 employees and teachers will encircle the Secretariat to protect the rights we have won.',
+    demands: [
+      'Implement the pay revision now; grant interim relief',
+      'Withdraw NPS and restore the old pension; repeal the PFRDA Act',
+      'Implement the DA arrears order without delay',
+      'Restore earned leave surrender',
+      'Cancel unfair transfers; hold general transfers as per norms',
+      'Fix the shortcomings in MEDISEP',
+      'Drop moves that weaken education and the civil service',
+    ],
+  },
 };
-// Settings from earlier versions that are no longer used (removed from the database by the v10 upgrade)
-const RETIRED_SETTINGS = ['subtitle', 'tagline', 'values', 'campaign', 'bonusQuestion'];
-// Questions removed in v10 (the bonus questions and those naming an organisation), by SHA-256 of their text
-const RETIRED_QUESTIONS = [
-  '094cb9259c1aeef799e6b7861d92f547b74210d01cfbe56697d4babe4d859ae6', '0a975fca49c76b20851615149e6d5186bc895ad64ef35172028c16ecd61fb7f8',
-  '0d6962700d0893f874c9fad1163bc18de343e4dd043f3a6e9144e20698c9d1a9', '0f4a1132588870524a9a88e48ef238c65c60d0e9adffd55db20851c348bb9d88',
-  '187acd10ac85924f1ff45f198a32048ba01980295e7db94d1ff01e0291b6bf8f', '191f58b72f3448a37398c24fe9fa6e59bbca370409a10f2909971ead340faf65',
-  '2e05d28bc24911123b1f3162c0f83bacb2a69a2ecf962fd3b1b576522f2dafd1', '48b832a5fcfd5d408a1fde90523351da75d5b6901c8f57da1fd36989a58e7d49',
-  '59b3dbd35e0324f0cda28a0af646f28eba72b56f388d77d4798ea3d3e6566f17', '61121e30c759cedd50037f8908d3a3d759f5429db5b6003e69a248adbb1dbadd',
-  '636080d3817895760abf7a3114618bd805a85bb98c8b774a605ebe3dbb9406de', '6d1781b30ea4c8183a89d224c7caf89417ca81d62449d72a1cee7397999626c9',
-  '7c76b8e0aa3245e786ed5e673772b4bac1a66aa4d01f7d2b3b04d7f5b8f5f474', '7d675ef389177e07e79a736b6fee48db3efbb93a9285ef3f3d12026210973c1d',
-  '7ed3b129e60fddf844f0060799c1a755b2131d3f3e8ff8c807e067818851edce', '8a3716fccc3d28bc0d03de2d01225ef36eb8bfcca17363ce9727340d51c1877a',
-  '9bca6b942eb639b93fb86370198f637a0bc1966a6f1dc76d22ef8891ba9cd263', '9cf2959f6213df7b35a4c0985c28adfe8ad52426a9719beb659d8682d09ef3d2',
-  'a1642c86eee0076a82eedc3366435220034c76b4c8c0c640e525574b416e4fb2', 'aacad52882b660fe0a02da93f57c534731f006605e05e1d82af4c83bff0a08af',
-  'b079fd2b068abf2048abeb7c2c5c91c74a0e5c4c66ae7ed1d2d6dfacda72ea85', 'c4479f59dbc495e288ecaa05a55e57108bfdb30afdec18954d79b860dba47d68',
-  'cb97baa4cd34988dd0d29dc235f0dcd09d0fda0fab6664ede114a4741ac3bf81', 'cc8cca66c82514db47269cf62094e02e8c49d4285b30ef9864b648b56badfc49',
-  'e7934755a611e5751b45542f765ee1491c45852cba40b5c17a75534df660b1f0', 'f513e6741dbc4652b96501c9c61dcb590b8998dcaa238f59f1f762748903e246',
-  'fc0afe5b3bd5b6d5ed26faa4c1d355cf0b6829d920c1214be7bc8c53e6001198',
-];
 
 const GRACE_MS = 400;          // network allowance subtracted from measured time
 const SKIP_AFTER_MS = 5000;    // Skip opens this long into a question (the game shows a countdown on the button)
@@ -114,7 +117,25 @@ function db(env) {
 // ---------- automatic database setup ----------
 // Creates missing tables, upgrades older databases and loads starter questions into an empty pool.
 // Runs once per Worker instance; afterwards it costs a single quick check.
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
+// Questions hidden by v10 (the bonus questions and those naming an organisation), by SHA-256 of their text;
+// v12 shows them again
+const RETIRED_QUESTIONS = [
+  '094cb9259c1aeef799e6b7861d92f547b74210d01cfbe56697d4babe4d859ae6', '0a975fca49c76b20851615149e6d5186bc895ad64ef35172028c16ecd61fb7f8',
+  '0d6962700d0893f874c9fad1163bc18de343e4dd043f3a6e9144e20698c9d1a9', '0f4a1132588870524a9a88e48ef238c65c60d0e9adffd55db20851c348bb9d88',
+  '187acd10ac85924f1ff45f198a32048ba01980295e7db94d1ff01e0291b6bf8f', '191f58b72f3448a37398c24fe9fa6e59bbca370409a10f2909971ead340faf65',
+  '2e05d28bc24911123b1f3162c0f83bacb2a69a2ecf962fd3b1b576522f2dafd1', '48b832a5fcfd5d408a1fde90523351da75d5b6901c8f57da1fd36989a58e7d49',
+  '59b3dbd35e0324f0cda28a0af646f28eba72b56f388d77d4798ea3d3e6566f17', '61121e30c759cedd50037f8908d3a3d759f5429db5b6003e69a248adbb1dbadd',
+  '636080d3817895760abf7a3114618bd805a85bb98c8b774a605ebe3dbb9406de', '6d1781b30ea4c8183a89d224c7caf89417ca81d62449d72a1cee7397999626c9',
+  '7c76b8e0aa3245e786ed5e673772b4bac1a66aa4d01f7d2b3b04d7f5b8f5f474', '7d675ef389177e07e79a736b6fee48db3efbb93a9285ef3f3d12026210973c1d',
+  '7ed3b129e60fddf844f0060799c1a755b2131d3f3e8ff8c807e067818851edce', '8a3716fccc3d28bc0d03de2d01225ef36eb8bfcca17363ce9727340d51c1877a',
+  '9bca6b942eb639b93fb86370198f637a0bc1966a6f1dc76d22ef8891ba9cd263', '9cf2959f6213df7b35a4c0985c28adfe8ad52426a9719beb659d8682d09ef3d2',
+  'a1642c86eee0076a82eedc3366435220034c76b4c8c0c640e525574b416e4fb2', 'aacad52882b660fe0a02da93f57c534731f006605e05e1d82af4c83bff0a08af',
+  'b079fd2b068abf2048abeb7c2c5c91c74a0e5c4c66ae7ed1d2d6dfacda72ea85', 'c4479f59dbc495e288ecaa05a55e57108bfdb30afdec18954d79b860dba47d68',
+  'cb97baa4cd34988dd0d29dc235f0dcd09d0fda0fab6664ede114a4741ac3bf81', 'cc8cca66c82514db47269cf62094e02e8c49d4285b30ef9864b648b56badfc49',
+  'e7934755a611e5751b45542f765ee1491c45852cba40b5c17a75534df660b1f0', 'f513e6741dbc4652b96501c9c61dcb590b8998dcaa238f59f1f762748903e246',
+  'fc0afe5b3bd5b6d5ed26faa4c1d355cf0b6829d920c1214be7bc8c53e6001198',
+];
 const schemaReady = new Map(); // per database
 function sqlStatements(text) {
   return text.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
@@ -140,7 +161,7 @@ async function ensureSchema(env, d) {
       try {
         const existing = current < 5 ? new Set() : new Set((await d.q(`SELECT question FROM questions`)).map((r) => r.question));
         // question batches added after the first release, and the schema version that adds them once
-        const BATCH_VERSION = { 'batch-2026a': 7, 'batch-2026b': 8 };
+        const BATCH_VERSION = { 'secretariat-valayal-2026': 7, 'question-mix-2026': 8 };
         const wanted = existing.size === 0 ? SEED_QUESTIONS
           : SEED_QUESTIONS.filter((q) => q.batch && BATCH_VERSION[q.batch] > current);
         const missing = wanted.filter((q) => !existing.has(q.question));
@@ -149,18 +170,16 @@ async function ensureSchema(env, d) {
         const steps = [[`SELECT pg_advisory_xact_lock(7241001)`]];   // one Worker instance at a time
         // v5: the English starter questions were replaced by the Malayalam question pool
         if (current < 5) steps.push([`DELETE FROM questions WHERE ${version} < 5`]);
-        // v10: the bonus questions and the questions naming an organisation are hidden (kept for past games)
-        if (current < 10 && existing.size) {
-          steps.push([`UPDATE questions SET active = false, campaign = false, updated_at = now()
-            WHERE ${version} < 10 AND (campaign OR encode(sha256(convert_to(question, 'UTF8')), 'hex') = ANY($1::text[]))`, [RETIRED_QUESTIONS]]);
+        // v9: reworded starter questions replace their older wording (only where the admin has not edited the text)
+        const renamed = SEED_QUESTIONS.filter((q) => q.previous?.length);
+        if (current < 9 && existing.size && renamed.length) {
+          const olds = [], news = [], expls = [];
+          for (const q of renamed) for (const o of q.previous) { olds.push(o); news.push(q.question); expls.push(q.explanation || null); }
+          steps.push([`UPDATE questions q SET question = v.new_q, explanation = v.expl, updated_at = now()
+            FROM (SELECT unnest($1::text[]) AS old_q, unnest($2::text[]) AS new_q, unnest($3::text[]) AS expl) v
+            WHERE q.question = v.old_q AND ${version} < 9
+              AND NOT EXISTS (SELECT 1 FROM questions x WHERE x.question = v.new_q)`, [olds, news, expls]]);
         }
-        if (current < 10) {
-          steps.push([`UPDATE settings SET value = value - $1::text[] WHERE key = 'game' AND ${version} < 10`, [RETIRED_SETTINGS]]);
-          // phone numbers and offices collected before v10 are erased (they are no longer collected or shown)
-          steps.push([`UPDATE players SET phone = NULL, office = NULL WHERE ${version} < 10 AND (phone IS NOT NULL OR office IS NOT NULL)`]);
-        }
-        // v11: every player from before v11 is deleted, with their games and answers (the leaderboard starts again)
-        if (current < 11) steps.push([`DELETE FROM players WHERE ${version} < 11`]);
         if (missing.length) {
           const params = [];
           const values = missing.map((q) => {
@@ -177,6 +196,14 @@ async function ensureSchema(env, d) {
         if (current < 6 && existing.size) {
           steps.push([`UPDATE questions SET category = 'Political', updated_at = now()
             WHERE ${version} < 6 AND question = ANY($1::text[])`, [SEED_QUESTIONS.filter((q) => !q.batch).map((q) => q.question)]]);
+        }
+        // v12: back to the 1.9.1 quiz after v10–v11 (2.x). The tables are put back by the schema above; here the
+        // questions v10 hid are shown again and the starter bonus questions get their campaign flag back
+        if (current >= 10 && current < 12) {
+          steps.push([`UPDATE questions SET active = true, updated_at = now()
+            WHERE ${version} < 12 AND encode(sha256(convert_to(question, 'UTF8')), 'hex') = ANY($1::text[])`, [RETIRED_QUESTIONS]]);
+          steps.push([`UPDATE questions SET campaign = true, updated_at = now()
+            WHERE ${version} < 12 AND question = ANY($1::text[])`, [SEED_QUESTIONS.filter((q) => q.campaign).map((q) => q.question)]]);
         }
         steps.push([`INSERT INTO settings (key, value) VALUES ('schema_version', $1::jsonb)
           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify(SCHEMA_VERSION)]]);
@@ -208,14 +235,21 @@ function secret(env) {
 
 async function getSettings(d) {
   const rows = await d.q(`SELECT value FROM settings WHERE key = 'game'`);
-  const v = { ...(rows[0]?.value || {}) };
-  for (const k of RETIRED_SETTINGS) delete v[k];
+  const v = rows[0]?.value || {};
   return {
     ...DEFAULT_SETTINGS, ...v,
     points: { ...DEFAULT_SETTINGS.points, ...(v.points || {}) },
     penalty: { ...DEFAULT_SETTINGS.penalty, ...(v.penalty || {}) },
+    campaign: { ...DEFAULT_SETTINGS.campaign, ...(v.campaign || {}) },
     categoryMix: Array.isArray(v.categoryMix) ? v.categoryMix : DEFAULT_SETTINGS.categoryMix,
   };
+}
+
+async function getAreas(d) {
+  const rows = await d.q(`SELECT district, name FROM areas ORDER BY district, lower(name)`);
+  const map = Object.fromEntries(DISTRICTS.map((x) => [x, []]));
+  for (const r of rows) if (map[r.district]) map[r.district].push(r.name);
+  return map;
 }
 
 // ---------- player auth ----------
@@ -259,7 +293,7 @@ async function leaderboard(d, district, playerId, env = null) {
   const pub = async () => {
     const [top, totalRow, plays] = await Promise.all([
       d.q(`${boardCte(!!district)}
-        SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.district, p.office
+        SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.office, p.district, p.area
         FROM ranked r JOIN players p ON p.id = r.player_id
         ORDER BY r.rank LIMIT 10`, params),
       d.q(`${boardCte(!!district)} SELECT count(*)::int AS n FROM ranked`, params),
@@ -271,13 +305,13 @@ async function leaderboard(d, district, playerId, env = null) {
     env ? memo(env, 'board:' + (district || ''), 10_000, pub) : pub(),
     playerId ? d.q(
       `${boardCte(!!district)}
-       SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.district, p.office
+       SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.office, p.district, p.area
        FROM ranked r JOIN players p ON p.id = r.player_id WHERE r.player_id = $${params.length + 1}`,
       [...params, playerId]) : [],
   ]);
   const map = (x) => x && ({
     rank: x.rank, score: x.score, timeMs: x.total_ms, correct: x.correct_count,
-    name: x.name, office: x.office || null, district: x.district, isMe: x.player_id === playerId,
+    name: x.name, office: x.office, district: x.district, area: x.area || null, isMe: x.player_id === playerId,
   });
   return { top: board.top.map(map), me: map(meRows[0] || null), total: board.total, ...(district ? {} : { plays: board.plays }) };
 }
@@ -296,41 +330,65 @@ async function apiConfig(env) {
 async function configData(env) {
   const d = db(env);
   const s = await getSettings(d);
-  const counts = await d.q(`SELECT difficulty, count(*)::int AS n FROM questions WHERE active AND NOT campaign GROUP BY difficulty`);
+  const counts = await d.q(`SELECT difficulty, count(*) FILTER (WHERE NOT campaign)::int AS n,
+    count(*) FILTER (WHERE campaign)::int AS c FROM questions WHERE active GROUP BY difficulty`);
   const avail = Object.fromEntries(counts.map((c) => [c.difficulty, c.n]));
   const total = LEVELS.reduce((t, l) => t + Math.min(s[l], avail[l] || 0), 0);
+  const hasBonus = s.bonusQuestion !== false && counts.some((c) => c.c > 0);
+  const areas = await getAreas(d);
   return ({
-    title: s.title, districts: DISTRICTS, levels: { easy: s.easy, medium: s.medium, hard: s.hard },
+    title: s.title, subtitle: s.subtitle, tagline: s.tagline, values: s.values,
+    districts: DISTRICTS, areas, levels: { easy: s.easy, medium: s.medium, hard: s.hard },
     totalQuestions: total || s.easy + s.medium + s.hard,
     timeLimitSec: s.timeLimitSec, points: s.points, penalty: s.penalty, streakBonus: s.streakBonus, streakCap: s.streakCap,
     maxAttempts: s.maxAttempts, open: s.open, version: VERSION,
+    campaign: s.campaign.show ? s.campaign : null, bonusQuestion: hasBonus,
   });
 }
 
 async function apiRegister(env, req) {
   const b = await body(req);
-  // A name (or nickname), a district and, for government employees, an office name (optional; blank for members
-  // of the public). No phone number. The player is known by the key saved on their phone; a new card always
-  // makes a new player. The office shows under the name on the leaderboard (with the district), in admin and exports.
-  const name = clean(b.name, 80), district = clean(b.district, 40), office = clean(b.office, 120) || null;
-  if (name.length < 2) fail(400, 'Enter your name or a nickname.');
+  const name = clean(b.name, 80), office = clean(b.office, 120), district = clean(b.district, 40);
+  const phone = String(b.phone || '').replace(/\D/g, '').replace(/^(91|0)(?=\d{10}$)/, '');
+  if (name.length < 2) fail(400, 'Enter your name.');
+  if (office.length < 2) fail(400, 'Enter your office.');
   if (!DISTRICTS.includes(district)) fail(400, 'Choose your district.');
+  if (!/^[6-9]\d{9}$/.test(phone)) fail(400, 'Enter a valid 10-digit mobile number.');
   const d = db(env);
-  const p = (await d.q(`INSERT INTO players (name, district, office) VALUES ($1, $2, $3) RETURNING id, name, district`, [name, district, office]))[0];
-  memoClear(env); // a new player card counts as a play straight away
+  const areaList = (await d.q(`SELECT name FROM areas WHERE district = $1`, [district])).map((r) => r.name);
+  let area = null;
+  if (areaList.length) {
+    area = areaList.find((n) => n === clean(b.area, 80)) || null;
+    if (!area) fail(400, 'Choose your area.');
+  }
+  const rows = await d.q(
+    `INSERT INTO players (name, office, district, area, phone) VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name, office = EXCLUDED.office,
+       district = EXCLUDED.district, area = EXCLUDED.area, updated_at = now()
+     RETURNING id, name, office, district, area, phone, (xmax = 0) AS created`,
+    [name, office, district, area, phone]);
+  const p = rows[0];
+  if (p.created) memoClear(env); // a new player card counts as a play straight away
+  const stats = await d.q(
+    `SELECT count(*) FILTER (WHERE status <> 'void')::int AS played, max(score) FILTER (WHERE status = 'finished') AS best
+     FROM games WHERE player_id = $1`, [p.id]);
   return json({
     playerKey: await playerKey(env, p.id),
-    player: { name: p.name, district: p.district },
-    returning: false, played: 0, best: null,
+    player: { name: p.name, office: p.office, district: p.district, area: p.area, phone: p.phone },
+    returning: !p.created, played: stats[0].played, best: stats[0].best,
   });
 }
 
 // Picks the game's questions: the configured number per level, never two questions with the
 // same topic tag (rephrased versions of one fact). Hardest level is filled first because it has
 // the fewest questions; if a level runs short, the gap is filled from other levels.
+// Questions about the campaign programme never appear among the regular questions; when the bonus
+// question is on, exactly one of them is added at the end as the bonus question.
 export function pickQuestions(pool, s) {
   const counts = { easy: s.easy || 0, medium: s.medium || 0, hard: s.hard || 0 };
   const ids = pickRegular(pool.filter((q) => !q.campaign), counts, s.categoryMix || []);
+  const bonus = s.bonusQuestion !== false && pool.find((q) => q.campaign);
+  if (bonus) ids.push(bonus.id);
   return ids;
 }
 
@@ -383,9 +441,7 @@ async function apiStart(env, req) {
   const pid = await verifyPlayer(env, b.playerKey);
   await rateLimit(env, 'start', pid);
   const d = db(env);
-  const [s, known] = await Promise.all([getSettings(d), d.q(`SELECT 1 FROM players WHERE id = $1`, [pid])]);
-  // a phone can still hold the key of a player who was deleted: ask for a new player card
-  if (!known[0]) fail(401, 'Please register again.');
+  const s = await getSettings(d);
   if (!s.open) fail(403, 'The quiz is closed right now. Watch for the next round.');
 
   // Resume an unfinished recent game instead of starting a fresh one
@@ -455,6 +511,7 @@ async function apiNext(env, req) {
   return json({
     done: false, index: idx, total: g.question_ids.length,
     question: q.question, category: q.category, difficulty: q.difficulty,
+    bonus: !!q.campaign && idx === g.question_ids.length - 1,
     options: order.map((i) => q.options[i]),
     points: g.config.points[q.difficulty], limitMs,
     remainingMs: Math.max(0, limitMs - Math.max(0, (g.elapsed || 0) - GRACE_MS)),
@@ -484,6 +541,8 @@ async function apiAnswer(env, req) {
     await d.q(`UPDATE games SET status = 'void', finished_at = now() WHERE id = $1`, [g.id]);
     fail(409, 'The questions were updated. Start a new game.');
   }
+  // the campaign bonus question (last question) never takes marks away
+  const isBonus = !!q.campaign && idx === g.question_ids.length - 1;
   const order = g.option_orders[idx];
   const cfg = g.config;
 
@@ -505,7 +564,7 @@ async function apiAnswer(env, req) {
   const streak = correct ? g.streak + 1 : 0;
   const streakPts = correct && streak >= 2 ? Math.min(cfg.streakCap, cfg.streakBonus * (streak - 1)) : 0;
   // Negative marks: never take the game score below zero
-  const penalty = wrong ? Math.min(Number(cfg.penalty?.[q.difficulty]) || 0, Math.max(0, g.score)) : 0;
+  const penalty = wrong && !isBonus ? Math.min(Number(cfg.penalty?.[q.difficulty]) || 0, Math.max(0, g.score)) : 0;
   const points = correct ? base + speed + streakPts : -penalty;
   const done = idx + 1 >= g.question_ids.length;
 
@@ -529,8 +588,8 @@ async function apiAnswer(env, req) {
   if (done) memoClear(env); // the new score shows on the leaderboard straight away
 
   return json({
-    correct, wrong, skipped, timedOut: !skipped && (choice === null || late), correctChoice: order.indexOf(q.correct_index),
-    points, penalty, fullPenalty: wrong ? Number(cfg.penalty?.[q.difficulty]) || 0 : 0,
+    correct, wrong, skipped, bonus: isBonus, timedOut: !skipped && (choice === null || late), correctChoice: order.indexOf(q.correct_index),
+    points, penalty, fullPenalty: wrong && !isBonus ? Number(cfg.penalty?.[q.difficulty]) || 0 : 0,
     breakdown: { base, speed, streak: streakPts }, timeMs,
     score: upd[0].score, streak, done,
     explanation: cfg.showExplanation ? q.explanation || null : null,
@@ -554,7 +613,8 @@ async function apiResult(env, req) {
   if (g.status === 'playing') fail(409, 'Finish the game first.');
   const player = pl[0], best = { id: player.best_id }, played = player.played;
   const [answers, overall, district] = await Promise.all([
-    d.q(`SELECT a.is_correct, a.points, a.skipped, a.chosen_index, a.q_index FROM answers a WHERE a.game_id = $1 ORDER BY a.q_index`, [g.id]),
+    d.q(`SELECT a.is_correct, a.points, a.skipped, a.chosen_index, a.q_index, coalesce(q.campaign, false) AS campaign
+      FROM answers a LEFT JOIN questions q ON q.id = a.question_id WHERE a.game_id = $1 ORDER BY a.q_index`, [g.id]),
     leaderboard(d, null, pid), leaderboard(d, player.district, pid),
   ]);
   const state = (a) => (a.is_correct ? 'right' : a.skipped ? 'skipped' : a.chosen_index === null ? 'timeout' : 'wrong');
@@ -562,7 +622,8 @@ async function apiResult(env, req) {
     score: g.score, correct: g.correct_count, total: g.question_ids.length, timeMs: g.total_ms,
     bestStreak: g.best_streak, voided: g.status === 'void',
     personalBest: best?.id === g.id,
-    answers: answers.map((a) => ({ correct: a.is_correct, points: a.points, state: state(a) })),
+    answers: answers.map((a) => ({ correct: a.is_correct, points: a.points, state: state(a),
+      bonus: a.campaign && a.q_index === g.question_ids.length - 1 })),
     wrong: answers.filter((a) => state(a) === 'wrong').length,
     skipped: answers.filter((a) => state(a) === 'skipped').length,
     timedOut: answers.filter((a) => state(a) === 'timeout').length,
@@ -621,6 +682,14 @@ async function adminStats(env) {
       coalesce(max(g.score) FILTER (WHERE g.status = 'finished'), 0)::int AS top_score
     FROM players p LEFT JOIN games g ON g.player_id = p.id
     GROUP BY p.district ORDER BY players DESC`);
+  const byArea = await d.q(`
+    SELECT p.district, p.area, count(DISTINCT p.id)::int AS players,
+      count(g.id) FILTER (WHERE g.status = 'finished')::int AS games,
+      coalesce(round(avg(g.score) FILTER (WHERE g.status = 'finished')), 0)::int AS avg_score,
+      coalesce(max(g.score) FILTER (WHERE g.status = 'finished'), 0)::int AS top_score
+    FROM players p LEFT JOIN games g ON g.player_id = p.id
+    GROUP BY p.district, p.area`);
+  const areas = await getAreas(d);
   const daily = await d.q(`
     SELECT to_char(date_trunc('day', started_at AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD') AS day,
       count(*)::int AS games, count(*) FILTER (WHERE status = 'finished')::int AS finished,
@@ -641,7 +710,7 @@ async function adminStats(env) {
       round(100.0 * avg(a.is_correct::int))::int AS accuracy
     FROM answers a JOIN questions q ON q.id = a.question_id
     GROUP BY q.id HAVING count(*) >= 3 ORDER BY accuracy ASC, attempts DESC LIMIT 8`);
-  return json({ totals, byDistrict, daily, hourly, byLevel, spread, hardest, districts: DISTRICTS });
+  return json({ totals, byDistrict, byArea, areas, daily, hourly, byLevel, spread, hardest, districts: DISTRICTS });
 }
 
 function validateQuestion(b) {
@@ -657,7 +726,7 @@ function validateQuestion(b) {
     question, options, correct, difficulty,
     category: clean(b.category, 60) || null, explanation: String(b.explanation || '').trim().slice(0, 600) || null,
     topic: clean(b.topic, 60) || null,
-    campaign: false, // the bonus question was removed in v10
+    campaign: b.campaign === true || ['true', 'yes', 'y', '1'].includes(String(b.campaign ?? '').trim().toLowerCase()),
     active: !(b.active === false || ['no', 'n', 'false', '0'].includes(String(b.active ?? '').trim().toLowerCase())),
   };
 }
@@ -730,12 +799,14 @@ async function adminImport(env, req) {
 async function adminPlayers(env, url) {
   const search = clean(url.searchParams.get('q'), 80);
   const district = url.searchParams.get('district') || '';
+  const area = url.searchParams.get('area') || '';
   const page = Math.max(0, Number(url.searchParams.get('page')) || 0);
   const like = `%${search}%`;
-  const where = `($1 = '' OR p.name ILIKE $2 OR p.office ILIKE $2) AND ($3 = '' OR p.district = $3)`;
+  const where = `($1 = '' OR p.name ILIKE $2 OR p.office ILIKE $2 OR p.phone LIKE $2 OR p.area ILIKE $2)
+    AND ($3 = '' OR p.district = $3) AND ($4 = '' OR coalesce(p.area, '') = $4)`;
   const d = db(env);
   const rows = await d.q(`
-    SELECT p.id, p.name, p.district, p.office, p.created_at,
+    SELECT p.id, p.name, p.office, p.district, p.area, p.phone, p.created_at,
       count(g.id) FILTER (WHERE g.status <> 'void')::int AS games,
       max(g.score) FILTER (WHERE g.status = 'finished') AS best,
       max(g.correct_count) FILTER (WHERE g.status = 'finished') AS best_correct,
@@ -743,8 +814,8 @@ async function adminPlayers(env, url) {
     FROM players p LEFT JOIN games g ON g.player_id = p.id
     WHERE ${where}
     GROUP BY p.id ORDER BY best DESC NULLS LAST, p.created_at DESC
-    LIMIT 50 OFFSET $4`, [search, like, district, page * 50]);
-  const total = await d.q(`SELECT count(*)::int AS n FROM players p WHERE ${where}`, [search, like, district]);
+    LIMIT 50 OFFSET $5`, [search, like, district, area, page * 50]);
+  const total = await d.q(`SELECT count(*)::int AS n FROM players p WHERE ${where}`, [search, like, district, area]);
   return json({ players: rows, total: total[0].n, page });
 }
 async function adminPlayer(env, id) {
@@ -768,40 +839,82 @@ async function adminSetGameStatus(env, id, status) {
   return json({ ok: true });
 }
 
+// ---------- areas (admin) ----------
+async function adminAreas(env) {
+  const rows = await db(env).q(`
+    SELECT a.id, a.district, a.name,
+      (SELECT count(*)::int FROM players p WHERE p.district = a.district AND p.area = a.name) AS players
+    FROM areas a ORDER BY a.district, lower(a.name)`);
+  return json({ districts: DISTRICTS, areas: rows });
+}
+async function adminAddAreas(env, req) {
+  const b = await body(req);
+  const district = String(b.district || '');
+  if (!DISTRICTS.includes(district)) fail(400, 'Choose a district.');
+  const names = [...new Set((Array.isArray(b.names) ? b.names : []).map((n) => clean(n, 80)).filter(Boolean))];
+  if (!names.length) fail(400, 'Type at least one area name.');
+  if (names.length > 200) fail(400, 'Add up to 200 areas at a time.');
+  const r = await db(env).q(
+    `INSERT INTO areas (district, name) SELECT $1, unnest($2::text[])
+     ON CONFLICT (district, name) DO NOTHING RETURNING id`, [district, names]);
+  return json({ added: r.length, skipped: names.length - r.length });
+}
+async function adminRenameArea(env, req, id) {
+  const name = clean((await body(req)).name, 80);
+  if (!name) fail(400, 'Area name is required.');
+  const d = db(env);
+  const cur = (await d.q(`SELECT district, name FROM areas WHERE id = $1`, [id]))[0];
+  if (!cur) fail(404, 'Area not found.');
+  if (cur.name === name) return json({ ok: true, playersUpdated: 0 });
+  if ((await d.q(`SELECT 1 FROM areas WHERE district = $1 AND name = $2`, [cur.district, name]))[0]) {
+    fail(409, `${cur.district} already has an area named ${name}.`);
+  }
+  await d.q(`UPDATE areas SET name = $2 WHERE id = $1`, [id, name]);
+  const moved = await d.q(
+    `UPDATE players SET area = $3, updated_at = now() WHERE district = $1 AND area = $2 RETURNING id`,
+    [cur.district, cur.name, name]);
+  return json({ ok: true, playersUpdated: moved.length });
+}
+async function adminDeleteArea(env, id) {
+  const r = await db(env).q(`DELETE FROM areas WHERE id = $1 RETURNING id`, [id]);
+  if (!r[0]) fail(404, 'Area not found.');
+  return json({ deleted: true });
+}
+
 async function adminExport(env, url) {
   const type = url.searchParams.get('type');
   const d = db(env);
   let head, rows;
   if (type === 'leaderboard') {
-    head = ['Rank', 'Name', 'District', 'Office', 'Best score', 'Correct', 'Time (s)', 'Finished at'];
+    head = ['Rank', 'Name', 'Office', 'District', 'Area', 'Phone', 'Best score', 'Correct', 'Time (s)', 'Finished at'];
     const r = await d.q(`${boardCte(false)}
-      SELECT r.rank, p.name, p.district, p.office, r.score, r.correct_count, r.total_ms, r.finished_at
+      SELECT r.rank, p.name, p.office, p.district, p.area, p.phone, r.score, r.correct_count, r.total_ms, r.finished_at
       FROM ranked r JOIN players p ON p.id = r.player_id ORDER BY r.rank`);
-    rows = r.map((x) => [x.rank, x.name, x.district, x.office, x.score, x.correct_count, (x.total_ms / 1000).toFixed(1), x.finished_at]);
+    rows = r.map((x) => [x.rank, x.name, x.office, x.district, x.area, x.phone, x.score, x.correct_count, (x.total_ms / 1000).toFixed(1), x.finished_at]);
   } else if (type === 'games') {
-    head = ['Game', 'Name', 'District', 'Office', 'Status', 'Score', 'Correct', 'Wrong', 'Skipped', 'Marks lost', 'Questions', 'Time (s)', 'Best streak', 'Started', 'Finished'];
+    head = ['Game', 'Name', 'Office', 'District', 'Area', 'Phone', 'Status', 'Score', 'Correct', 'Wrong', 'Skipped', 'Marks lost', 'Questions', 'Time (s)', 'Best streak', 'Started', 'Finished'];
     const r = await d.q(`
-      SELECT g.id, p.name, p.district, p.office, g.status, g.score, g.correct_count,
+      SELECT g.id, p.name, p.office, p.district, p.area, p.phone, g.status, g.score, g.correct_count,
         (SELECT count(*) FROM answers a WHERE a.game_id = g.id AND NOT a.is_correct AND NOT a.skipped AND a.chosen_index IS NOT NULL)::int AS wrong,
         (SELECT count(*) FROM answers a WHERE a.game_id = g.id AND a.skipped)::int AS skipped,
         (SELECT coalesce(-sum(a.points) FILTER (WHERE a.points < 0), 0) FROM answers a WHERE a.game_id = g.id)::int AS lost,
         cardinality(g.question_ids) AS total, g.total_ms, g.best_streak, g.started_at, g.finished_at
       FROM games g JOIN players p ON p.id = g.player_id ORDER BY g.started_at DESC`);
-    rows = r.map((x) => [x.id, x.name, x.district, x.office, x.status, x.score, x.correct_count, x.wrong, x.skipped, x.lost, x.total, (x.total_ms / 1000).toFixed(1), x.best_streak, x.started_at, x.finished_at]);
+    rows = r.map((x) => [x.id, x.name, x.office, x.district, x.area, x.phone, x.status, x.score, x.correct_count, x.wrong, x.skipped, x.lost, x.total, (x.total_ms / 1000).toFixed(1), x.best_streak, x.started_at, x.finished_at]);
   } else if (type === 'questions') {
-    head = ['id', 'difficulty', 'category', 'topic', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'option_f', 'correct', 'explanation', 'active'];
+    head = ['id', 'difficulty', 'category', 'topic', 'campaign', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'option_f', 'correct', 'explanation', 'active'];
     const r = await d.q(`SELECT * FROM questions ORDER BY id`);
     rows = r.map((x) => {
       const o = [...x.options, '', '', '', '', '', ''].slice(0, 6);
-      return [x.id, x.difficulty, x.category, x.topic, x.question, ...o, 'ABCDEF'[x.correct_index], x.explanation, x.active ? 'yes' : 'no'];
+      return [x.id, x.difficulty, x.category, x.topic, x.campaign ? 'yes' : '', x.question, ...o, 'ABCDEF'[x.correct_index], x.explanation, x.active ? 'yes' : 'no'];
     });
   } else {
-    head = ['Name', 'District', 'Office', 'Registered', 'Games', 'Best score'];
+    head = ['Name', 'Office', 'District', 'Area', 'Phone', 'Registered', 'Games', 'Best score'];
     const r = await d.q(`
-      SELECT p.name, p.district, p.office, p.created_at,
+      SELECT p.name, p.office, p.district, p.area, p.phone, p.created_at,
         count(g.id) FILTER (WHERE g.status <> 'void')::int AS games, max(g.score) FILTER (WHERE g.status = 'finished') AS best
       FROM players p LEFT JOIN games g ON g.player_id = p.id GROUP BY p.id ORDER BY p.created_at`);
-    rows = r.map((x) => [x.name, x.district, x.office, x.created_at, x.games, x.best]);
+    rows = r.map((x) => [x.name, x.office, x.district, x.area, x.phone, x.created_at, x.games, x.best]);
   }
   const fmt = (v) => (v instanceof Date ? v.toISOString() : v);
   const csv = '﻿' + [head, ...rows].map((r) => r.map((v) => csvCell(fmt(v))).join(',')).join('\r\n');
@@ -821,6 +934,9 @@ async function adminSettings(env, req) {
   const int = (v, lo, hi, dflt) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt; };
   const next = {
     title: clean(b.title ?? cur.title, 60) || DEFAULT_SETTINGS.title,
+    subtitle: clean(b.subtitle ?? cur.subtitle, 100),
+    tagline: clean(b.tagline ?? cur.tagline, 140),
+    values: (Array.isArray(b.values) ? b.values : cur.values).map((v) => clean(v, 40)).filter(Boolean).slice(0, 8),
     easy: int(b.easy, 0, 30, cur.easy), medium: int(b.medium, 0, 30, cur.medium), hard: int(b.hard, 0, 30, cur.hard),
     timeLimitSec: int(b.timeLimitSec, 5, 120, cur.timeLimitSec),
     points: {
@@ -838,8 +954,18 @@ async function adminSettings(env, req) {
     maxAttempts: int(b.maxAttempts, 0, 100, cur.maxAttempts),
     open: b.open === undefined ? cur.open : !!b.open,
     showExplanation: b.showExplanation === undefined ? cur.showExplanation : !!b.showExplanation,
+    bonusQuestion: b.bonusQuestion === undefined ? cur.bonusQuestion !== false : !!b.bonusQuestion,
     categoryMix: (Array.isArray(b.categoryMix) ? b.categoryMix : cur.categoryMix)
       .map((m) => ({ name: clean(m.name, 60), percent: int(m.percent, 0, 100, 0) })).filter((m) => m.name && m.percent > 0).slice(0, 12),
+    campaign: (() => {
+      const c = { ...cur.campaign, ...(b.campaign || {}) };
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(String(c.date || '')) ? c.date : cur.campaign.date;
+      return {
+        show: !!c.show, name: clean(c.name, 60), nameMl: clean(c.nameMl, 80), date, place: clean(c.place, 60),
+        organiser: clean(c.organiser, 100), line: clean(c.line, 200),
+        demands: (Array.isArray(c.demands) ? c.demands : []).map((x) => clean(x, 120)).filter(Boolean).slice(0, 12),
+      };
+    })(),
   };
   if (next.easy + next.medium + next.hard < 1) fail(400, 'A game needs at least one question.');
   await d.q(`INSERT INTO settings (key, value) VALUES ('game', $1::jsonb)
@@ -901,7 +1027,7 @@ async function route(req, env) {
   const url = new URL(req.url);
   const p = url.pathname.replace(/\/+$/, '') || '/';
   const m = req.method;
-  const adminPath = '/' + String(env.ADMIN_PATH || 'admin-desk').replace(/^\/+|\/+$/g, '');
+  const adminPath = '/' + String(env.ADMIN_PATH || 'union-control-room').replace(/^\/+|\/+$/g, '');
 
   if (p === adminPath && m === 'GET') {
     return new Response(ADMIN_HTML.replaceAll('{{VERSION}}', VERSION), {
@@ -910,15 +1036,6 @@ async function route(req, env) {
         'x-robots-tag': 'noindex, nofollow', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer',
       },
     });
-  }
-  // Link previews (WhatsApp and others) only show the picture when its address is complete, so the page's
-  // og:image and og:url get this site's own address (works on workers.dev and on any custom domain)
-  if ((p === '/' || p === '/index.html') && (m === 'GET' || m === 'HEAD') && env.ASSETS && typeof HTMLRewriter !== 'undefined') {
-    const page = await env.ASSETS.fetch(req);
-    return new HTMLRewriter()
-      .on('meta[property="og:image"]', { element(e) { e.setAttribute('content', url.origin + '/og-image.jpg'); } })
-      .on('meta[property="og:url"]', { element(e) { e.setAttribute('content', url.origin + '/'); } })
-      .transform(page);
   }
   if (!p.startsWith('/api/')) return null;
   if (p === '/api/health' && m === 'GET') {
@@ -929,11 +1046,12 @@ async function route(req, env) {
       const [r] = await d.q(`SELECT
         (SELECT coalesce(max((value #>> '{}')::int), 0) FROM settings WHERE key = 'schema_version') AS db_version,
         (SELECT count(*)::int FROM questions WHERE active) AS questions,
-        (SELECT count(*)::int FROM players) AS players`);
+        (SELECT count(*)::int FROM players) AS players,
+        (SELECT count(*)::int FROM areas) AS areas`);
       return json({
         ok: !lastUpgradeError, version: VERSION, database: 'connected', schemaVersion: SCHEMA_VERSION, databaseVersion: r.db_version,
         questionUpgrade: lastUpgradeError || 'done',
-        activeQuestions: r.questions, players: r.players,
+        activeQuestions: r.questions, players: r.players, areas: r.areas,
         appSecret: env.APP_SECRET && env.APP_SECRET.length >= 16 ? 'set' : 'MISSING (add APP_SECRET, 16+ characters)',
         adminPassword: env.ADMIN_PASSWORD ? 'set' : 'MISSING (add ADMIN_PASSWORD)',
       });
@@ -980,6 +1098,12 @@ async function route(req, env) {
       if (!id && m === 'POST') return adminSaveQuestion(env, req, null);
       if (/^\d+$/.test(id || '') && m === 'PUT') return adminSaveQuestion(env, req, Number(id));
       if (/^\d+$/.test(id || '') && m === 'DELETE') return adminDeleteQuestion(env, Number(id));
+    }
+    if (parts[0] === 'areas') {
+      if (!id && m === 'GET') return adminAreas(env);
+      if (!id && m === 'POST') return adminAddAreas(env, req);
+      if (/^\d+$/.test(id || '') && m === 'PUT') return adminRenameArea(env, req, Number(id));
+      if (/^\d+$/.test(id || '') && m === 'DELETE') return adminDeleteArea(env, Number(id));
     }
     if (parts[0] === 'players') {
       if (!id && m === 'GET') return adminPlayers(env, url);

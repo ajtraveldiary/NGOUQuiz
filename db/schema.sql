@@ -1,12 +1,13 @@
--- Arivu Quiz — Neon Postgres schema
+-- Kerala NGO Union Quiz — Neon Postgres schema
 -- Run once in the Neon SQL editor (or: psql "$DATABASE_URL" -f db/schema.sql)
 
 CREATE TABLE IF NOT EXISTS players (
   id          SERIAL PRIMARY KEY,
   name        TEXT NOT NULL,
-  office      TEXT,                          -- not collected since v10 (kept for earlier players)
+  office      TEXT NOT NULL,
   district    TEXT NOT NULL,
-  phone       TEXT UNIQUE,                   -- not collected since v10 (kept for earlier players)
+  area        TEXT,                          -- union area within the district (optional)
+  phone       TEXT NOT NULL UNIQUE,          -- 10-digit Indian mobile, digits only
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -20,7 +21,7 @@ CREATE TABLE IF NOT EXISTS questions (
   difficulty     TEXT NOT NULL CHECK (difficulty IN ('easy','medium','hard')),
   category       TEXT,
   topic          TEXT,                        -- questions sharing a topic never appear in the same game
-  campaign       BOOLEAN NOT NULL DEFAULT false, -- no longer used (always false since v10)
+  campaign       BOOLEAN NOT NULL DEFAULT false, -- about the campaign programme: one per game, at the campaign slot
   explanation    TEXT,                        -- shown after answering
   active         BOOLEAN NOT NULL DEFAULT true,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -67,14 +68,22 @@ CREATE TABLE IF NOT EXISTS settings (
   value  JSONB NOT NULL
 );
 
+-- Union areas under each district (managed from the admin page)
+CREATE TABLE IF NOT EXISTS areas (
+  id          SERIAL PRIMARY KEY,
+  district    TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (district, name)
+);
+
 -- ---- Upgrades for databases created with an earlier version (safe to re-run) ----
+ALTER TABLE players ADD COLUMN IF NOT EXISTS area TEXT;
+-- Thiruvananthapuram is now two union districts: North and South
+UPDATE players SET district = 'Thiruvananthapuram North' WHERE district = 'Thiruvananthapuram';
 ALTER TABLE answers ADD COLUMN IF NOT EXISTS skipped BOOLEAN NOT NULL DEFAULT false;
+-- Organisation line changed from "Kerala NGO Union, State Committee" to "Kerala NGO Union" (only if not customised)
+UPDATE settings SET value = jsonb_set(value, '{subtitle}', '"Kerala NGO Union"')
+  WHERE key = 'game' AND value->>'subtitle' = 'Kerala NGO Union, State Committee';
 ALTER TABLE questions ADD COLUMN IF NOT EXISTS topic TEXT;
 ALTER TABLE questions ADD COLUMN IF NOT EXISTS campaign BOOLEAN NOT NULL DEFAULT false;
--- v10: only a name and district are collected; Thiruvananthapuram is one district again
-ALTER TABLE players ALTER COLUMN office DROP NOT NULL;
-ALTER TABLE players ALTER COLUMN phone DROP NOT NULL;
-UPDATE players SET district = 'Thiruvananthapuram' WHERE district IN ('Thiruvananthapuram North', 'Thiruvananthapuram South');
--- v11: areas are no longer used
-ALTER TABLE players DROP COLUMN IF EXISTS area;
-DROP TABLE IF EXISTS areas;

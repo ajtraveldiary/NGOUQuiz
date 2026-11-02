@@ -10,8 +10,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Anek+Malayalam:wght@400;500;600;700&family=Big+Shoulders+Display:wght@800;900&display=swap" rel="stylesheet">
 <style>
 :root {
-  --night: #0C3A37; --night-2: #12504B; --red: #B9502F; --red-deep: #8E3A20; --brass: #E3B341; --brass-deep: #B88A1E;
-  --leaf: #23804B; --leaf-deep: #18603A; --paper: #FFFFFF; --bg: #EFF3EF; --line: #D6E0DA; --ink: #0C2E2B; --muted: #4F6E69;
+  --night: #2B0710; --night-2: #3D0B17; --red: #D7262E; --red-deep: #A8141E; --brass: #F2B33D; --brass-deep: #C98A12;
+  --leaf: #2FA36B; --leaf-deep: #1E7A4E; --paper: #FFFFFF; --bg: #F6EEE6; --line: #E8D9CB; --ink: #2B0710; --muted: #7A5A55;
   --display: 'Big Shoulders Display', 'Arial Narrow', sans-serif; --body: 'Anek Malayalam', 'Noto Sans Malayalam', system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
@@ -23,12 +23,12 @@ button { cursor: pointer; }
 .btn { border: 0; border-radius: 10px; padding: 8px 14px; font-weight: 700; background: var(--night); color: #fff; }
 .btn.brass { background: var(--brass); color: var(--ink); }
 .btn.ghost { background: transparent; border: 1.5px solid var(--line); color: var(--ink); }
-.btn.danger { background: transparent; border: 1.5px solid #EDB9A6; color: var(--red-deep); }
+.btn.danger { background: transparent; border: 1.5px solid #F2B8B5; color: var(--red-deep); }
 .btn.sm { padding: 4px 10px; font-size: 13px; }
 .btn:disabled { opacity: .5; cursor: default; }
 input, select, textarea { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; background: #fff; width: 100%; }
 textarea { resize: vertical; min-height: 70px; }
-input:focus, select:focus, textarea:focus { outline: none; border-color: var(--night-2); }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--red); }
 label { display: flex; flex-direction: column; gap: 3px; font-weight: 600; font-size: 13px; color: var(--muted); }
 label > input, label > select, label > textarea { color: var(--ink); font-weight: 400; font-size: 15px; }
 
@@ -43,9 +43,9 @@ label > input, label > select, label > textarea { color: var(--ink); font-weight
 header.top { background: var(--night); color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10; flex-wrap: wrap; }
 header.top h1 { margin: 0; font-family: var(--display); font-weight: 900; font-size: 26px; letter-spacing: .01em; }
 header.top h1 small.ver { opacity: .6; font-size: 11px; }
-header.top h1 small { font-family: var(--body); font-weight: 500; font-size: 13px; color: #EBC3B4; margin-left: 6px; letter-spacing: 0; }
+header.top h1 small { font-family: var(--body); font-weight: 500; font-size: 13px; color: #E9BDB5; margin-left: 6px; letter-spacing: 0; }
 nav.tabs { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
-nav.tabs button { background: none; border: 0; color: #EBC3B4; padding: 6px 12px; border-radius: 999px; font-weight: 700; }
+nav.tabs button { background: none; border: 0; color: #E9BDB5; padding: 6px 12px; border-radius: 999px; font-weight: 700; }
 nav.tabs button.on { background: var(--brass); color: var(--ink); }
 nav.tabs .out { color: #fff; opacity: .7; }
 main { max-width: 1180px; margin: 0 auto; padding: 18px 16px 60px; }
@@ -67,28 +67,29 @@ h3 { margin: 0 0 10px; font-size: 16px; }
 /* charts */
 .bars { display: flex; flex-direction: column; gap: 6px; }
 .bar { display: grid; grid-template-columns: 130px 1fr 64px; align-items: center; gap: 8px; font-size: 13px; }
-.bar .track { height: 14px; background: #E6EDE7; border-radius: 4px; overflow: hidden; }
-.bar .fill { display: block; height: 100%; background: var(--night-2); border-radius: 4px; }
+.bar .track { height: 14px; background: #F3E6DA; border-radius: 4px; overflow: hidden; }
+.bar .fill { display: block; height: 100%; background: var(--red); border-radius: 4px; }
 .bar .v { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 .bar .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cols { display: flex; align-items: flex-end; gap: 3px; height: 150px; padding-top: 18px; }
 .col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 3px; min-width: 0; }
-.col i { display: block; width: 100%; background: var(--night-2); border-radius: 3px 3px 0 0; min-height: 2px; position: relative; }
+.col i { display: block; width: 100%; background: var(--red); border-radius: 3px 3px 0 0; min-height: 2px; position: relative; }
 .col i[data-v]:hover::after { content: attr(data-v); position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 12px; font-weight: 700; background: var(--night); color: #fff; padding: 0 6px; border-radius: 4px; white-space: nowrap; }
 .col small { font-size: 10px; color: var(--muted); white-space: nowrap; }
 .legend { font-size: 12px; color: var(--muted); }
 .lvl { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
 .lvl.easy { background: #CDEFD9; color: var(--leaf-deep); }
-.lvl.medium { background: #F7E6B5; color: #8A5E00; }
-.lvl.hard { background: #F6D3C6; color: var(--red-deep); }
+.lvl.medium { background: #FBE6B8; color: #8A5E00; }
+.lvl.hard { background: #FBD0D2; color: var(--red-deep); }
+.lvl.bonus { background: var(--red); color: #fff; }
 
 /* tables */
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 700; padding: 8px; border-bottom: 1.5px solid var(--line); white-space: nowrap; }
-td { padding: 8px; border-bottom: 1px solid #E3EBE5; vertical-align: top; }
+td { padding: 8px; border-bottom: 1px solid #F1E6DB; vertical-align: top; }
 tr.click { cursor: pointer; }
-tr.click:hover td { background: #F6F8F4; }
+tr.click:hover td { background: #FBF5EF; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 10px; color: var(--muted); }
 
@@ -105,7 +106,7 @@ tr.click:hover td { background: #F6F8F4; }
 .acc.low { color: var(--red-deep); }
 
 /* modal / drawer */
-.modal { position: fixed; inset: 0; background: rgba(9, 44, 41, .55); display: grid; place-items: center; z-index: 50; padding: 16px; }
+.modal { position: fixed; inset: 0; background: rgba(43, 7, 16, .55); display: grid; place-items: center; z-index: 50; padding: 16px; }
 .modal .box { background: #fff; border-radius: 18px; width: min(640px, 100%); max-height: 92vh; overflow: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
 .modal .box.wide { width: min(900px, 100%); }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -116,14 +117,28 @@ tr.click:hover td { background: #F6F8F4; }
 .check input { width: auto; }
 .hint { color: var(--muted); font-size: 13px; margin: 0; }
 .game { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
-.game.void { background: #FBEEE8; }
+.game.void { background: #FBEDEC; }
 .game header { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .game header b { font-family: var(--display); font-size: 24px; }
-.ans { font-size: 13px; padding: 4px 0; border-top: 1px dashed #E3EBE5; display: grid; grid-template-columns: 22px 1fr auto; gap: 6px; }
+.ans { font-size: 13px; padding: 4px 0; border-top: 1px dashed #F1E6DB; display: grid; grid-template-columns: 22px 1fr auto; gap: 6px; }
 .ans .mk.ok { color: var(--leaf-deep); font-weight: 800; }
 .ans .mk.no { color: var(--red); font-weight: 800; }
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--night); color: #fff; padding: 10px 16px; border-radius: 12px; z-index: 60; font-weight: 600; }
-pre.sample { background: #F6F8F4; border-radius: 10px; padding: 10px; font-size: 12px; overflow-x: auto; margin: 0; }
+/* districts & areas */
+.dgrid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); align-items: start; }
+.dist { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.dist.none { border-style: dashed; }
+.dist header { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.dist h3 { margin: 0; }
+.dist header span { color: var(--muted); font-size: 13px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1.5px solid var(--line); background: #FBF5EF; border-radius: 999px; padding: 3px 10px; font-size: 14px; font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
+.chip:hover { border-color: var(--red); }
+.chip small { color: var(--muted); font-weight: 500; font-size: 12px; }
+.chip.hit { background: #FBE6B8; border-color: var(--brass-deep); }
+.adder { display: flex; gap: 8px; align-items: flex-start; }
+.adder textarea { min-height: 40px; height: 40px; }
+pre.sample { background: #FBF5EF; border-radius: 10px; padding: 10px; font-size: 12px; overflow-x: auto; margin: 0; }
 @media (max-width: 640px) {
   .bar { grid-template-columns: 96px 1fr 52px; }
   .q { grid-template-columns: 1fr; }
@@ -151,6 +166,7 @@ pre.sample { background: #F6F8F4; border-radius: 10px; padding: 10px; font-size:
     <nav class="tabs" id="tabs">
       <button data-tab="insights" class="on">Insights</button>
       <button data-tab="questions">Questions</button>
+      <button data-tab="areas">Districts &amp; areas</button>
       <button data-tab="players">Players &amp; scores</button>
       <button data-tab="settings">Settings</button>
       <button class="out" id="logout">Log out</button>
@@ -165,6 +181,7 @@ pre.sample { background: #F6F8F4; border-radius: 10px; padding: 10px; font-size:
         <div class="panel"><h3>Games per day (last 30 days)</h3><div class="cols" id="dailyChart"></div><p class="legend" id="dailyLegend"></p></div>
         <div class="panel"><h3>Players by district</h3><div class="bars" id="districtChart"></div></div>
         <div class="panel"><h3>District performance</h3><div class="table-wrap"><table id="districtTable"></table></div></div>
+        <div class="panel"><div class="toolbar" style="margin-bottom:8px"><h3 class="grow" style="margin:0">Area performance</h3><select id="areaDistrict" aria-label="District"></select></div><div class="table-wrap"><table id="areaTable"></table></div></div>
         <div class="panel"><h3>Right answers per game</h3><div class="cols" id="spreadChart"></div><p class="legend">How many games ended with 0, 1, 2… correct answers.</p></div>
         <div class="panel"><h3>Accuracy by level</h3><div class="bars" id="levelChart"></div></div>
         <div class="panel"><h3>When people play (IST)</h3><div class="cols" id="hourChart"></div></div>
@@ -179,6 +196,7 @@ pre.sample { background: #F6F8F4; border-radius: 10px; padding: 10px; font-size:
         <input type="search" id="qSearch" placeholder="Search questions">
         <select id="qLevel"><option value="">All levels</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
         <select id="qActive"><option value="">Active and hidden</option><option value="1">Active only</option><option value="0">Hidden only</option></select>
+        <select id="qKind"><option value="">All questions</option><option value="regular">Regular</option><option value="bonus">Bonus (campaign)</option></select>
         <span class="grow legend" id="qCount"></span>
         <button class="btn ghost" id="exportXlsx">Download Excel</button>
         <button class="btn ghost" id="importBtn">Import Excel / CSV</button>
@@ -187,12 +205,21 @@ pre.sample { background: #F6F8F4; border-radius: 10px; padding: 10px; font-size:
       <div class="qlist" id="qList"></div>
     </section>
 
+    <!-- Districts & areas -->
+    <section data-view="areas" hidden>
+      <h2>Districts and areas</h2>
+      <p class="hint" style="margin:-4px 0 12px">Players choose their area after their district. A district with no areas skips the area question. Click an area to rename or delete it. Renaming also updates players who chose it.</p>
+      <div class="toolbar"><input type="search" id="aSearch" placeholder="Find an area"><span class="grow legend" id="aCount"></span></div>
+      <div class="dgrid" id="aList"></div>
+    </section>
+
     <!-- Players -->
     <section data-view="players" hidden>
       <h2>Players and scores</h2>
       <div class="toolbar">
-        <input type="search" id="pSearch" placeholder="Name or office">
+        <input type="search" id="pSearch" placeholder="Name, office or phone">
         <select id="pDistrict"><option value="">All districts</option></select>
+        <select id="pArea" hidden><option value="">All areas</option></select>
         <span class="grow"></span>
         <button class="btn ghost sm" data-export="leaderboard">Leaderboard CSV</button>
         <button class="btn ghost sm" data-export="games">All games CSV</button>
@@ -227,6 +254,8 @@ pre.sample { background: #F6F8F4; border-radius: 10px; padding: 10px; font-size:
         </div>
         <label class="check"><input type="checkbox" name="open"> Quiz is open for new games</label>
         <label class="check"><input type="checkbox" name="showExplanation"> Show the explanation after each answer</label>
+        <label class="check"><input type="checkbox" name="bonusQuestion"> Bonus question after the last regular question</label>
+        <p class="hint" style="margin-top:-6px">One question marked "Bonus question about the campaign" is asked at the end of each game. A wrong bonus answer loses no marks. These questions never appear among the regular ones.</p>
         <label>Question mix for the regular questions (one per line: Category = percent)
           <textarea name="categoryMix" rows="5" placeholder="Political = 60"></textarea></label>
         <p class="hint" style="margin-top:-6px">Names must match the questions' Category. With 10 questions, 60% = 6 questions. Difficulty levels are matched as closely as the pool allows; any shortfall is filled from other questions.</p>
@@ -261,6 +290,7 @@ pre.sample { background: #F6F8F4; border-radius: 10px; padding: 10px; font-size:
       <span class="hint" style="font-weight:400">Give rephrased versions of the same fact the same tag. Questions with the same tag never appear in the same game.</span></label>
     <datalist id="topics"></datalist>
     <label>Explanation shown after answering (optional) <textarea name="explanation" maxlength="600"></textarea></label>
+    <label class="check"><input type="checkbox" name="campaign"> Bonus question about the campaign (asked once, at the end of a game)</label>
     <label class="check"><input type="checkbox" name="active" checked> Active (can appear in games)</label>
     <p class="err" id="qErr"></p>
     <div class="foot"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn brass" type="submit">Save question</button></div>
@@ -272,7 +302,7 @@ pre.sample { background: #F6F8F4; border-radius: 10px; padding: 10px; font-size:
   <div class="box">
     <h2 style="margin:0">Import questions</h2>
     <p class="hint">Easiest: <b>Download Excel</b>, edit it, and upload it here. Rows keep their <b>id</b>, so they update the same questions; rows without an id are added (or update the question with exactly the same text). Questions you delete from the file are not removed: set <b>active</b> to <i>no</i> to hide one.</p>
-    <p class="hint">Columns: <b>id</b>, <b>difficulty</b> (easy / medium / hard), <b>category</b>, <b>topic</b> (optional tag), <b>question</b>, <b>option_a</b> to <b>option_f</b> (at least two), <b>correct</b> (letter A–F), <b>explanation</b>, <b>active</b> (yes / no). Excel (.xlsx) or CSV UTF-8. Malayalam text works.</p>
+    <p class="hint">Columns: <b>id</b>, <b>difficulty</b> (easy / medium / hard), <b>category</b>, <b>topic</b> (optional tag), <b>campaign</b> (yes = bonus question about the campaign), <b>question</b>, <b>option_a</b> to <b>option_f</b> (at least two), <b>correct</b> (letter A–F), <b>explanation</b>, <b>active</b> (yes / no). Excel (.xlsx) or CSV UTF-8. Malayalam text works.</p>
     <pre class="sample">difficulty,category,topic,question,option_a,option_b,option_c,option_d,correct,explanation
 easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബല്യത്തിൽ വന്നത് ഏത് തീയതി മുതൽ?,01-01-2013,01-04-2013,01-07-2013,01-01-2014,B,01-04-2013 മുതൽ.</pre>
     <input type="file" id="impFile" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
@@ -280,6 +310,17 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     <div id="impPreview" class="hint"></div>
     <div class="foot"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn brass" id="impGo" disabled>Import</button></div>
   </div>
+</div>
+
+<!-- Area editor -->
+<div class="modal" id="aModal" hidden>
+  <form class="box" id="aForm" style="width:min(440px,100%)">
+    <h2 style="margin:0">Edit area</h2>
+    <p class="hint" id="aInfo"></p>
+    <label>Area name <input name="aname" maxlength="80" required></label>
+    <p class="err" id="aErr"></p>
+    <div class="foot"><button type="button" class="btn danger" id="aDel">Delete area</button><span style="flex:1"></span><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn brass" type="submit">Save name</button></div>
+  </form>
 </div>
 
 <!-- Player detail -->
@@ -329,7 +370,7 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
   function enter() { $('#login').hidden = true; $('#shell').hidden = false; go('insights'); }
 
   // ---------- tabs ----------
-  const loaders = { insights: loadStats, questions: loadQuestions, players: loadPlayers, settings: loadSettings };
+  const loaders = { insights: loadStats, questions: loadQuestions, areas: loadAreas, players: loadPlayers, settings: loadSettings };
   function go(tab) {
     $$('#tabs [data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
     $$('[data-view]').forEach((v) => (v.hidden = v.dataset.view !== tab));
@@ -373,6 +414,13 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     $('#districtTable').innerHTML = `<tr><th>District</th><th class="num">Players</th><th class="num">Games</th><th class="num">Avg score</th><th class="num">Top</th></tr>` +
       drows.map((d) => `<tr><td>${esc(d.district)}</td><td class="num">${fmt(d.players)}</td><td class="num">${fmt(d.games)}</td><td class="num">${fmt(d.avg_score)}</td><td class="num">${fmt(d.top_score)}</td></tr>`).join('');
 
+    statCache = s;
+    const ad = $('#areaDistrict');
+    if (!ad.options.length) {
+      ad.innerHTML = districts.map((d) => `<option>${esc(d)}</option>`).join('');
+      ad.value = drows[0]?.district || districts[0];
+    }
+    renderAreaTable();
 
     const maxC = Math.max(10, ...s.spread.map((x) => x.correct));
     const sp = Object.fromEntries(s.spread.map((x) => [x.correct, x.games]));
@@ -386,6 +434,20 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
         s.hardest.map((q) => `<tr><td>${esc(q.question)}</td><td><span class="lvl ${q.difficulty}">${q.difficulty}</span></td><td class="num">${fmt(q.attempts)}</td><td class="num"><span class="acc low">${q.accuracy}%</span></td></tr>`).join('')
       : '<tr><td class="hint">Not enough answers yet.</td></tr>';
   }
+  let statCache = null;
+  function renderAreaTable() {
+    const s = statCache; if (!s) return;
+    const d = $('#areaDistrict').value, names = s.areas[d] || [];
+    const seen = s.byArea.filter((x) => x.district === d);
+    const rows = names.map((n) => ({ players: 0, games: 0, avg_score: 0, top_score: 0, ...seen.find((x) => x.area === n), area: n }));
+    seen.filter((x) => !names.includes(x.area)).forEach((x) => rows.push({ ...x, area: x.area ? `${x.area} (removed)` : 'No area given' }));
+    rows.sort((a, b) => b.players - a.players || a.area.localeCompare(b.area));
+    $('#areaTable').innerHTML = rows.length
+      ? `<tr><th>Area</th><th class="num">Players</th><th class="num">Games</th><th class="num">Avg score</th><th class="num">Top</th></tr>` +
+        rows.map((r) => `<tr><td>${esc(r.area)}</td><td class="num">${fmt(r.players)}</td><td class="num">${fmt(r.games)}</td><td class="num">${fmt(r.avg_score)}</td><td class="num">${fmt(r.top_score)}</td></tr>`).join('')
+      : '<tr><td class="hint">No areas added for this district yet. Add them under Districts &amp; areas.</td></tr>';
+  }
+  $('#areaDistrict').addEventListener('change', renderAreaTable);
   function bars(sel, items) {
     const max = Math.max(1, ...items.map((i) => i.max || i.v));
     $(sel).innerHTML = items.map((i) => `<div class="bar"><span class="lbl" title="${esc(i.l)}">${esc(i.l)}</span><span class="track"><span class="fill" style="width:${(i.v / (i.max || max)) * 100}%"></span></span><span class="v">${fmt(i.v)}${i.suffix || ''}</span></div>`).join('');
@@ -405,18 +467,19 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     renderQuestions();
   }
   function renderQuestions() {
-    const s = $('#qSearch').value.trim().toLowerCase(), l = $('#qLevel').value, a = $('#qActive').value;
+    const s = $('#qSearch').value.trim().toLowerCase(), l = $('#qLevel').value, a = $('#qActive').value, k = $('#qKind').value;
     const list = questions.filter((q) => (!l || q.difficulty === l) && (!a || String(+q.active) === a) &&
+      (!k || (k === 'bonus') === !!q.campaign) &&
       (!s || q.question.toLowerCase().includes(s) || (q.category || '').toLowerCase().includes(s) || (q.topic || '').toLowerCase().includes(s) || q.options.some((o) => o.toLowerCase().includes(s))));
-    const counts = ['easy', 'medium', 'hard'].map((lv) => `${questions.filter((q) => q.active && q.difficulty === lv).length} ${lv}`).join(', ')
-      + '. By category: '
-      + Object.entries(questions.filter((q) => q.active).reduce((m, q) => ((m[q.category || 'None'] = (m[q.category || 'None'] || 0) + 1), m), {}))
+    const counts = ['easy', 'medium', 'hard'].map((lv) => `${questions.filter((q) => q.active && !q.campaign && q.difficulty === lv).length} ${lv}`).join(', ')
+      + `, ${questions.filter((q) => q.active && q.campaign).length} bonus. By category: `
+      + Object.entries(questions.filter((q) => q.active && !q.campaign).reduce((m, q) => ((m[q.category || 'None'] = (m[q.category || 'None'] || 0) + 1), m), {}))
         .map(([k, v]) => `${k} ${v}`).join(', ');
     $('#qCount').textContent = `Showing ${list.length} of ${questions.length}. Active: ${counts}.`;
     $('#qList').innerHTML = list.map((q) => `
       <article class="q${q.active ? '' : ' off'}">
         <div>
-          <div class="meta"><span class="lvl ${q.difficulty}">${q.difficulty}</span>${q.category ? `<span>${esc(q.category)}</span>` : ''}${q.topic ? `<span title="Topic tag">#${esc(q.topic)}</span>` : ''}
+          <div class="meta"><span class="lvl ${q.difficulty}">${q.difficulty}</span>${q.category ? `<span>${esc(q.category)}</span>` : ''}${q.topic ? `<span title="Topic tag">#${esc(q.topic)}</span>` : ''}${q.campaign ? '<span class="lvl bonus">bonus</span>' : ''}
             <span>${q.attempts ? `${fmt(q.attempts)} answers, <span class="acc${q.accuracy < 35 ? ' low' : ''}">${q.accuracy}% right</span>${q.skipped ? `, ${fmt(q.skipped)} skipped` : ''}, avg ${(q.avg_ms / 1000).toFixed(1)}s` : 'Not answered yet'}</span>
             ${q.active ? '' : '<b>Hidden</b>'}</div>
           <div class="qt">${esc(q.question)}</div>
@@ -429,7 +492,7 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
         </div>
       </article>`).join('') || '<p class="hint">No questions match.</p>';
   }
-  ['#qSearch', '#qLevel', '#qActive'].forEach((s) => $(s).addEventListener('input', renderQuestions));
+  ['#qSearch', '#qLevel', '#qActive', '#qKind'].forEach((s) => $(s).addEventListener('input', renderQuestions));
   $('#qList').addEventListener('click', async (e) => {
     const b = e.target.closest('button'); if (!b) return;
     const id = Number(b.dataset.edit || b.dataset.toggle || b.dataset.del);
@@ -460,7 +523,7 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     $('#optRows').innerHTML = '';
     (q ? q.options : ['', '', '', '']).forEach((o, i) => optRow(o, q ? i === q.correct_index : false));
     f.question.value = q?.question || ''; f.difficulty.value = q?.difficulty || 'easy';
-    f.category.value = q?.category || ''; f.topic.value = q?.topic || ''; f.explanation.value = q?.explanation || ''; f.active.checked = q ? q.active : true;
+    f.category.value = q?.category || ''; f.topic.value = q?.topic || ''; f.explanation.value = q?.explanation || ''; f.active.checked = q ? q.active : true; f.campaign.checked = !!q?.campaign;
     $('#qModal').hidden = false; f.question.focus();
   }
   $('#addQ').addEventListener('click', () => openEditor(null));
@@ -471,7 +534,7 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     const data = {
       question: f.question.value, options: rows.map((r) => r.querySelector('.opt').value.trim()),
       correct_index: rows.findIndex((r) => r.querySelector('[type=radio]').checked),
-      difficulty: f.difficulty.value, category: f.category.value, topic: f.topic.value, explanation: f.explanation.value, active: f.active.checked,
+      difficulty: f.difficulty.value, category: f.category.value, topic: f.topic.value, explanation: f.explanation.value, active: f.active.checked, campaign: f.campaign.checked,
     };
     if (data.correct_index < 0) { $('#qErr').textContent = 'Select the right answer with the round button.'; return; }
     try {
@@ -557,14 +620,14 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     }
     return Array.from(rows, (r) => r || []).filter((r) => r.some((x) => String(x).trim()));
   }
-  const QCOLS = ['id', 'difficulty', 'category', 'topic', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'option_f', 'correct', 'explanation', 'active'];
+  const QCOLS = ['id', 'difficulty', 'category', 'topic', 'campaign', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'option_f', 'correct', 'explanation', 'active'];
   $('#exportXlsx').addEventListener('click', async () => {
     try {
       const list = (await api('GET', 'questions')).questions.slice().sort((a, b) => a.id - b.id);
-      const rows = [QCOLS, ...list.map((q) => [q.id, q.difficulty, q.category || '', q.topic || '', q.question,
+      const rows = [QCOLS, ...list.map((q) => [q.id, q.difficulty, q.category || '', q.topic || '', q.campaign ? 'yes' : '', q.question,
         ...[...q.options, '', '', '', '', '', ''].slice(0, 6), 'ABCDEF'[q.correct_index], q.explanation || '', q.active ? 'yes' : 'no'])];
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(makeXlsx('Questions', rows, [7, 10, 18, 16, 60, 30, 30, 30, 30, 20, 20, 9, 50, 8]));
+      a.href = URL.createObjectURL(makeXlsx('Questions', rows, [7, 10, 18, 16, 10, 60, 30, 30, 30, 30, 20, 20, 9, 50, 8]));
       a.download = `quiz-questions-${new Date().toISOString().slice(0, 10)}.xlsx`; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
       toast(`Downloaded ${list.length} questions`);
@@ -610,7 +673,7 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
       if (!r[col('question')]?.trim() || opts.length < 2 || ci < 0 || ci >= opts.length || !['easy', 'medium', 'hard'].includes(d)) { problems.push(n + 2); return; }
       const cell = (n) => (col(n) >= 0 ? String(r[col(n)] ?? '').trim() : '');
       pending.push({ id: cell('id'), question: String(r[col('question')]).trim(), options: opts, correct: ci, difficulty: d,
-        category: cell('category'), topic: cell('topic'), explanation: cell('explanation'), active: cell('active') || 'yes' });
+        category: cell('category'), topic: cell('topic'), campaign: cell('campaign'), explanation: cell('explanation'), active: cell('active') || 'yes' });
     });
     const by = ['easy', 'medium', 'hard'].map((l) => `${pending.filter((p) => p.difficulty === l).length} ${l}`).join(', ');
     const known = new Set(questions.map((q) => String(q.id))), texts = new Set(questions.map((q) => q.question.trim()));
@@ -626,21 +689,84 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     } catch (ex) { $('#impErr').textContent = ex.message; $('#impGo').disabled = false; }
   });
 
+  // ---------- districts & areas ----------
+  let areaRows = [], editingArea = null;
+  async function loadAreas() {
+    const r = await api('GET', 'areas');
+    districts = r.districts; areaRows = r.areas;
+    renderAreas();
+  }
+  function renderAreas() {
+    const s = $('#aSearch').value.trim().toLowerCase();
+    const withAreas = new Set(areaRows.map((a) => a.district)).size;
+    $('#aCount').textContent = `${areaRows.length} areas in ${withAreas} of ${districts.length} districts.`;
+    const shown = districts.filter((d) => !s || d.toLowerCase().includes(s) || areaRows.some((a) => a.district === d && a.name.toLowerCase().includes(s)));
+    $('#aList').innerHTML = shown.map((d) => {
+      const list = areaRows.filter((a) => a.district === d);
+      return `<article class="dist${list.length ? '' : ' none'}">
+        <header><h3>${esc(d)}</h3><span>${list.length ? `${list.length} area${list.length === 1 ? '' : 's'}` : 'No areas yet. Players here skip the area question.'}</span></header>
+        ${list.length ? `<div class="chips">${list.map((a) => `<button type="button" class="chip${s && a.name.toLowerCase().includes(s) ? ' hit' : ''}" data-area="${a.id}" title="${a.players} player${a.players === 1 ? '' : 's'}. Click to rename or delete.">${esc(a.name)}<small>${a.players}</small></button>`).join('')}</div>` : ''}
+        <form class="adder" data-district="${esc(d)}"><textarea name="names" rows="1" aria-label="New areas for ${esc(d)}" placeholder="Add areas, comma separated"></textarea><button class="btn sm" type="submit">Add</button></form>
+      </article>`;
+    }).join('') || '<p class="hint">No district or area matches.</p>';
+  }
+  $('#aSearch').addEventListener('input', renderAreas);
+  $('#aList').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target, names = f.names.value.split(/[\n,]+/).map((x) => x.trim()).filter(Boolean);
+    if (!names.length) { f.names.focus(); return; }
+    try {
+      const r = await api('POST', 'areas', { district: f.dataset.district, names });
+      toast(`Added ${r.added} area${r.added === 1 ? '' : 's'} to ${f.dataset.district}${r.skipped ? `. ${r.skipped} already listed` : ''}`);
+      await loadAreas();
+    } catch (ex) { toast(ex.message); }
+  });
+  $('#aList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-area]'); if (!b) return;
+    editingArea = areaRows.find((a) => a.id === Number(b.dataset.area));
+    $('#aForm').aname.value = editingArea.name;
+    $('#aInfo').textContent = `${editingArea.district}. ${editingArea.players} player${editingArea.players === 1 ? '' : 's'} chose this area.`;
+    $('#aErr').textContent = ''; $('#aModal').hidden = false; $('#aForm').aname.focus();
+  });
+  $('#aForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const r = await api('PUT', 'areas/' + editingArea.id, { name: e.target.aname.value });
+      $('#aModal').hidden = true;
+      toast(r.playersUpdated ? `Area renamed. ${r.playersUpdated} player${r.playersUpdated === 1 ? '' : 's'} updated.` : 'Area renamed');
+      await loadAreas();
+    } catch (ex) { $('#aErr').textContent = ex.message; }
+  });
+  $('#aDel').addEventListener('click', async () => {
+    const a = editingArea;
+    if (!confirm(`Delete ${a.name} from ${a.district}? New players won't see it.${a.players ? ` The ${a.players} player${a.players === 1 ? '' : 's'} who chose it keep it on their record.` : ''}`)) return;
+    try { await api('DELETE', 'areas/' + a.id); $('#aModal').hidden = true; toast('Area deleted'); await loadAreas(); }
+    catch (ex) { $('#aErr').textContent = ex.message; }
+  });
+
   // ---------- players ----------
   let page = 0, pTimer;
   async function loadPlayers() {
     if (!districts.length) { const s = await api('GET', 'stats'); districts = s.districts; $('#pDistrict').insertAdjacentHTML('beforeend', districts.map((d) => `<option>${esc(d)}</option>`).join('')); }
-    const p = new URLSearchParams({ q: $('#pSearch').value.trim(), district: $('#pDistrict').value, page });
+    if (!areaRows.length) { try { areaRows = (await api('GET', 'areas')).areas; fillAreaFilter(); } catch { /* optional */ } }
+    const p = new URLSearchParams({ q: $('#pSearch').value.trim(), district: $('#pDistrict').value, area: $('#pArea').hidden ? '' : $('#pArea').value, page });
     const r = await api('GET', 'players?' + p);
-    $('#pTable').innerHTML = `<tr><th>Name</th><th>District</th><th>Office</th><th class="num">Games</th><th class="num">Best</th><th class="num">Right</th><th>Last played</th></tr>` +
-      (r.players.map((x) => `<tr class="click" data-id="${x.id}"><td><b>${esc(x.name)}</b></td><td>${esc(x.district)}</td><td>${esc(x.office || '')}</td>
+    $('#pTable').innerHTML = `<tr><th>Name</th><th>Office</th><th>District</th><th>Area</th><th>Phone</th><th class="num">Games</th><th class="num">Best</th><th class="num">Right</th><th>Last played</th></tr>` +
+      (r.players.map((x) => `<tr class="click" data-id="${x.id}"><td><b>${esc(x.name)}</b></td><td>${esc(x.office)}</td><td>${esc(x.district)}</td><td>${esc(x.area || '')}</td><td>${esc(x.phone)}</td>
         <td class="num">${x.games}</td><td class="num"><b>${x.best == null ? '–' : fmt(x.best)}</b></td><td class="num">${x.best_correct ?? '–'}</td><td>${when(x.last_played)}</td></tr>`).join('') ||
-      '<tr><td colspan="7" class="hint">No players match.</td></tr>');
+      '<tr><td colspan="9" class="hint">No players match.</td></tr>');
     $('#pInfo').textContent = r.total ? `${page * 50 + 1}–${Math.min(r.total, page * 50 + 50)} of ${fmt(r.total)}` : '';
     $('#pPrev').disabled = page === 0; $('#pNext').disabled = (page + 1) * 50 >= r.total;
   }
   $('#pSearch').addEventListener('input', () => { clearTimeout(pTimer); pTimer = setTimeout(() => { page = 0; loadPlayers().catch((e) => toast(e.message)); }, 300); });
-  $('#pDistrict').addEventListener('change', () => { page = 0; loadPlayers().catch((e) => toast(e.message)); });
+  function fillAreaFilter() {
+    const d = $('#pDistrict').value, list = areaRows.filter((a) => a.district === d), sel = $('#pArea'), cur = sel.value;
+    sel.innerHTML = '<option value="">All areas</option>' + list.map((a) => `<option>${esc(a.name)}</option>`).join('');
+    sel.value = list.some((a) => a.name === cur) ? cur : '';
+    sel.hidden = !d || !list.length;
+  }
+  $('#pDistrict').addEventListener('change', () => { fillAreaFilter(); page = 0; loadPlayers().catch((e) => toast(e.message)); });
+  $('#pArea').addEventListener('change', () => { page = 0; loadPlayers().catch((e) => toast(e.message)); });
   $('#pPrev').addEventListener('click', () => { page--; loadPlayers(); });
   $('#pNext').addEventListener('click', () => { page++; loadPlayers(); });
   $('#pTable').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) openPlayer(tr.dataset.id); });
@@ -652,7 +778,7 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     r.answers.forEach((a) => (byGame[a.game_id] ||= []).push(a));
     $('#pBox').innerHTML = `
       <div class="toolbar" style="margin:0"><h2 class="grow" style="margin:0">${esc(p.name)}</h2><button class="btn ghost sm" data-close>Close</button></div>
-      <p class="hint" style="margin:0">${esc([p.office, p.district].filter(Boolean).join(', '))}. Registered ${when(p.created_at)}.</p>
+      <p class="hint" style="margin:0">${esc([p.office, p.area, p.district].filter(Boolean).join(', '))}. Phone ${esc(p.phone)}. Registered ${when(p.created_at)}.</p>
       ${r.games.map((g) => `
         <div class="game${g.status === 'void' ? ' void' : ''}">
           <header><b>${fmt(g.score)}</b><span>${g.correct_count}/${g.total} right, ${(g.total_ms / 1000).toFixed(1)}s, best streak ${g.best_streak}</span>
@@ -696,7 +822,7 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
     ['easy', 'medium', 'hard', 'timeLimitSec', 'streakBonus', 'streakCap', 'maxAttempts'].forEach((k) => (f[k].value = s[k]));
     f.p_easy.value = s.points.easy; f.p_medium.value = s.points.medium; f.p_hard.value = s.points.hard;
     f.n_easy.value = s.penalty.easy; f.n_medium.value = s.penalty.medium; f.n_hard.value = s.penalty.hard;
-    f.open.checked = s.open; f.showExplanation.checked = s.showExplanation;
+    f.open.checked = s.open; f.showExplanation.checked = s.showExplanation; f.bonusQuestion.checked = s.bonusQuestion !== false;
     f.categoryMix.value = (s.categoryMix || []).map((m) => `${m.name} = ${m.percent}`).join('\n');
   }
   $('#setForm').addEventListener('submit', async (e) => {
@@ -707,7 +833,7 @@ easy,കേരളം,kerala-date,കേരളത്തിൽ NPS പ്രാബ
       points: { easy: f.p_easy.value, medium: f.p_medium.value, hard: f.p_hard.value },
       penalty: { easy: f.n_easy.value, medium: f.n_medium.value, hard: f.n_hard.value },
       streakBonus: f.streakBonus.value, streakCap: f.streakCap.value, maxAttempts: f.maxAttempts.value,
-      open: f.open.checked, showExplanation: f.showExplanation.checked,
+      open: f.open.checked, showExplanation: f.showExplanation.checked, bonusQuestion: f.bonusQuestion.checked,
       categoryMix: f.categoryMix.value.split('\n').map((l) => l.match(/^\s*(.+?)\s*[=:]\s*(\d+)\s*%?\s*$/)).filter(Boolean)
         .map((m) => ({ name: m[1], percent: Number(m[2]) })),
     };

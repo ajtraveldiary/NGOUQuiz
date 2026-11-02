@@ -1,6 +1,6 @@
 {
-  "name": "arivu-quiz",
-  "version": "2.5.1",
+  "name": "ngo-union-quiz",
+  "version": "2.6.0",
   "private": true,
   "type": "module",
   "scripts": {
