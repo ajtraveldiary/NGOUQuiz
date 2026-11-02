@@ -3,6 +3,13 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 2.7.0
+- Data moves from Neon Postgres to Cloudflare D1 (database `ngouquiz`, binding `DB` in wrangler.toml), so the whole quiz runs in one Cloudflare account. `DATABASE_URL` is no longer used
+- Every query is rewritten for SQLite; the game, scoring, timing, leaderboard, admin page and exports work as before. Many-row writes (starter questions, question import, areas) go as one statement each, within D1's limits
+- `npm run export:neon` (scripts/export-neon.mjs) copies everything from Neon into `db/neon-export.sql` for `wrangler d1 execute`; a copied 2.x database (version 11) gets the 1.9.1 fixes on its first `/api/health`
+- The admin page is back at `/desk-ydxesk4m` (2.6.0 had brought back the 1.9.1 address `/union-control-room`)
+- Tests, the local server and the load test run on a D1 stand-in built on Node's own SQLite (scripts/d1-sqlite.mjs) instead of PGlite, and now also run from folders with spaces in their path
+
 ## 2.6.0
 - Back to the 1.9.1 quiz: every file is as it was in 1.9.1 (commit 9496849), so 2.0.0–2.5.1 are undone — the Kerala NGO Union branding, bonus question, phone/office/area player card, districts & areas page and the earlier colours return
 - Database version 12 puts back what 2.x removed from an existing database: the `areas` table and the players' `area` column, Thiruvananthapuram North/South, the questions hidden in 2.0.0 and the campaign flag on the starter bonus questions

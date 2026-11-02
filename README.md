@@ -1,6 +1,6 @@
 # Arivu Quiz — Kerala NGO Union campaign quiz
 
-Mobile-first quiz game on **Cloudflare Workers + Neon Postgres**.
+Mobile-first quiz game on **Cloudflare Workers + D1** (Cloudflare's SQLite database). Everything runs in one Cloudflare account.
 
 - Player card (name, office, district, area, mobile). 15 union districts, with Thiruvananthapuram split into North and South; areas under each district are managed from the admin page → rules card → 3‑2‑1 countdown → 10 timed questions → score, rank and Top 10.
 - Questions march from easy to hard (default 4 easy, 4 medium, 2 hard, picked at random from the pool every game). Option order is shuffled per player so "the answer is B" can't be passed around.
@@ -23,34 +23,36 @@ public/            game frontend (served as static assets)
   index.html  app.js  style.css  favicon.svg
 src/index.js       Worker: API + admin routes
 src/admin.html     admin page (bundled into the Worker, not a public file)
-db/schema.sql      tables
+db/schema.sql      tables (D1 / SQLite)
 db/seed.sql        232 starter questions in Malayalam (Political, Constitution, KSR & Govt rules, General political; 21 bonus questions on the Secretariat Valayal)
 db/seed-questions.json  same questions as JSON (edit + `npm run seed:build`)
-scripts/           local server, API tests, demo build
+scripts/           local server, API tests, demo build, one-time Neon export
 ```
 
 ## Deploy (about 15 minutes)
 
-1. **Neon**: create a project at neon.tech (choose region *AWS Asia Pacific (Singapore)* for Kerala). Copy the connection string (Dashboard → Connect → "Pooled connection"). The Worker creates the tables itself.
-2. **Cloudflare**:
+1. **Cloudflare**:
    ```bash
    npm install
    npx wrangler login
-   npx wrangler secret put DATABASE_URL     # paste the Neon connection string
+   npx wrangler d1 create ngouquiz --location apac   # then put the printed database_id in wrangler.toml ([[d1_databases]], binding "DB")
    npx wrangler secret put APP_SECRET       # any random 32+ character string
    npx wrangler secret put ADMIN_PASSWORD   # admin page password
    ```
+2. The Worker creates the tables and loads the starter questions itself on its first request.
 3. In `wrangler.toml`, change `ADMIN_PATH` to a path only your team knows (e.g. `ngou-desk-4831`).
 4. `npm run deploy`. When it finishes, it prints the game's web address (also shown in the Cloudflare dashboard under *Workers & Pages → ngouquiz*). The admin page is that address followed by `/` and your `ADMIN_PATH`.
 5. Optional: Workers → your worker → *Settings → Domains & Routes* to add `quiz.keralangounion.in`.
 
-## Try it locally without Neon
+## Try it locally
 
 ```bash
 npm install
 npm run local        # http://localhost:8787 — admin at /union-control-room, password "admin"
-npm test             # end-to-end API tests on an in-memory Postgres
+npm test             # end-to-end API tests on an in-memory D1 stand-in (Node's built-in SQLite, Node 22.5+)
 ```
+
+`npm run dev` runs the real Worker with a local D1 database (kept in `.wrangler/`); it needs `APP_SECRET` and `ADMIN_PASSWORD` in a `.dev.vars` file.
 
 ## Admin page
 
@@ -73,7 +75,19 @@ Use *Settings → Questions CSV* to download the current pool in the same format
 
 ## Database setup and upgrades are automatic
 
-On its first request the Worker creates any missing tables, upgrades older databases (adds areas, moves "Thiruvananthapuram" players to "Thiruvananthapuram North") and loads the Malayalam starter questions if the pool is empty (version 1.5.0 also replaced the old English questions once). Running `db/schema.sql` by hand is optional.
+On its first request the Worker creates any missing tables and loads the Malayalam starter questions if the pool is empty. A database copied from a 2.x Neon database (version 11) is put back to the 1.9.1 quiz once: "Thiruvananthapuram" players move to "Thiruvananthapuram North", and the bonus questions hidden in 2.0.0 are shown again. Running `db/schema.sql` by hand is optional.
+
+## Moving the data from Neon (once)
+
+Until 2.7.0 the quiz kept its data in Neon Postgres. To copy it into D1 (players, games, answers, questions with admin edits, settings, areas):
+
+```powershell
+$env:DATABASE_URL = "postgresql://…"   # the Neon connection string
+npm run export:neon                    # writes db/neon-export.sql
+npx wrangler d1 execute ngouquiz --remote --file=db/neon-export.sql
+```
+
+The file replaces everything in the D1 database. Then open `/api/health` once (it finishes any upgrade) and delete `db/neon-export.sql`, which holds players' phone numbers. Keep the same `APP_SECRET` as before if players should keep their saved player cards (only on the same web address).
 
 ## Game structure
 
@@ -101,11 +115,11 @@ Every request is checked against a per-minute limit before the database is touch
 
 Over the limit, the game shows "Too many requests. Wait a minute and try again." Per-address limits are generous on purpose: many phones on one mobile network, or one office, can share an address. The limits live in `wrangler.toml` (`[[ratelimits]]`, Cloudflare Workers Rate Limiting) and in `LIMITS` in `src/index.js` (used if the Cloudflare limits are missing); keep the two in step. Changes sent from other websites are refused.
 
-`npm run load 150` plays 150 full games at once against an in-memory database and checks every stored score.
+`npm run load 150` plays 150 full games at once against an in-memory D1 stand-in and checks every stored score.
 
 ## Troubleshooting
 
-Open the game's address followed by `/api/health`. It reports whether the database connects, the number of questions, players and areas, and whether `APP_SECRET` and `ADMIN_PASSWORD` are set. If something is wrong it says what to fix, for example a wrong `DATABASE_URL`.
+Open the game's address followed by `/api/health`. It reports whether the database connects, the number of questions, players and areas, and whether `APP_SECRET` and `ADMIN_PASSWORD` are set. If something is wrong it says what to fix, for example a missing D1 binding.
 
 ## Before launch
 

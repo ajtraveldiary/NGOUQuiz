@@ -1,25 +1,23 @@
-// Run the whole app locally with an in-memory Postgres (no Neon, no Cloudflare account needed).
+// Run the whole app locally with an in-memory D1 stand-in (Node's built-in SQLite; no Cloudflare account needed).
+// `npm run dev` (wrangler dev, with a local D1) does the same closer to Cloudflare.
 // Usage: npm run local   → http://localhost:8787  (admin: /union-control-room, password "admin")
 import { build } from 'esbuild';
-import { PGlite } from '@electric-sql/pglite';
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { d1 } from './d1-sqlite.mjs';
 
-const root = new URL('..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url));
 await build({
   entryPoints: [root + 'src/index.js'], bundle: true, format: 'esm', platform: 'neutral',
   outfile: root + '.test-build/worker.mjs', loader: { '.html': 'text', '.sql': 'text' }, logLevel: 'error', mainFields: ['module', 'main'],
 });
-const worker = (await import(root + '.test-build/worker.mjs?' + Date.now())).default;
-const pg = new PGlite();
+const worker = (await import(pathToFileURL(join(root, '.test-build/worker.mjs')).href + '?' + Date.now())).default;
 // tables and starter questions are created by the Worker on first request
 const env = {
   APP_SECRET: 'local-dev-secret-change-me-0123456789', ADMIN_PASSWORD: 'admin', ADMIN_PATH: 'union-control-room',
-  __db: {
-    q: async (t, p = []) => (await pg.query(t, p)).rows,
-    tx: (list) => pg.transaction(async (x) => { const out = []; for (const [q, p = []] of list) out.push((await x.query(q, p)).rows); return out; }),
-  },
+  DB: d1(),
 };
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.png': 'image/png', '.txt': 'text/plain' };
 const port = Number(process.env.PORT) || 8787;

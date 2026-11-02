@@ -1,6 +1,5 @@
 // Kerala NGO Union Quiz — Cloudflare Worker (API + hidden admin page)
-// Static game files are served from /public by Workers Static Assets.
-import { neon } from '@neondatabase/serverless';
+// Static game files are served from /public by Workers Static Assets. Data is in Cloudflare D1 (binding DB).
 import ADMIN_HTML from './admin.html';
 import SCHEMA_SQL from '../db/schema.sql';
 import SEED_QUESTIONS from '../db/seed-questions.json';
@@ -59,7 +58,11 @@ const DEFAULT_SETTINGS = {
 const GRACE_MS = 400;          // network allowance subtracted from measured time
 const SKIP_AFTER_MS = 5000;    // Skip opens this long into a question (the game shows a countdown on the button)
 const LATE_MS = 1500;          // answers arriving later than limit + this count as timeouts
-const RESUME_WINDOW = '1 hour';
+const RESUME_WINDOW = '-1 hour';  // SQLite date modifier
+// the current time as stored in the database (ISO text in UTC)
+const NOW = `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`;
+// milliseconds since a stored time, by the database clock
+const MS_SINCE = (col) => `CAST(round((julianday('now') - julianday(${col})) * 86400000) AS INTEGER)`;
 
 // ---------- helpers ----------
 const enc = new TextEncoder();
@@ -99,19 +102,45 @@ const csvCell = (v) => {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
+// Columns stored as JSON text and as 1/0, turned back into lists/objects and true/false when read
+const JSON_COLS = new Set(['options', 'option_orders', 'config', 'question_ids', 'value']);
+const BOOL_COLS = new Set(['campaign', 'active', 'is_correct', 'skipped', 'created']);
+function readRow(r) {
+  for (const k in r) {
+    if (r[k] === null) continue;
+    if (JSON_COLS.has(k) && typeof r[k] === 'string') r[k] = JSON.parse(r[k]);
+    else if (BOOL_COLS.has(k)) r[k] = !!r[k];
+  }
+  return r;
+}
+// Parameters are written $1, $2 …; lists and objects are sent as JSON text, true/false as 1/0
+const bindValue = (v) => (v === undefined ? null : typeof v === 'boolean' ? (v ? 1 : 0)
+  : v !== null && typeof v === 'object' ? JSON.stringify(v) : v);
+// (a statement may use only some of a shared parameter list; D1 wants exactly as many values as the highest number)
+function prep(DB, text, params) {
+  const used = Math.max(0, ...[...text.matchAll(/\$(\d+)/g)].map((m) => Number(m[1])));
+  return DB.prepare(text.replace(/\$(\d+)/g, '?$1')).bind(...params.slice(0, used).map(bindValue));
+}
+
+const dbCache = new WeakMap();
 function db(env) {
-  if (env.__db) return env.__db; // test hook
-  if (!env.DATABASE_URL) fail(500, 'DATABASE_URL is not set. Add it as a secret in the Cloudflare Worker settings.');
-  // Accept common paste mistakes: psql 'postgresql://…', quotes, DATABASE_URL=…
-  const url = String(env.DATABASE_URL).trim()
-    .replace(/^DATABASE_URL\s*=\s*/i, '').replace(/^psql\s+/i, '').replace(/^['"]|['"]$/g, '').trim();
-  if (!/^postgres(ql)?:\/\//i.test(url)) fail(500, 'DATABASE_URL looks wrong. It should start with postgresql:// (copy the connection string from Neon, not the psql command).');
-  const sql = neon(url);
-  return {
-    q: (text, params = []) => sql.query(text, params),
-    // several statements in one database transaction
-    tx: (list) => sql.transaction(list.map(([text, params = []]) => sql.query(text, params))),
-  };
+  if (!env.DB) fail(500, 'The D1 database is not connected. Add the DB binding ([[d1_databases]]) in wrangler.toml and deploy again.');
+  let d = dbCache.get(env.DB);
+  if (!d) {
+    const DB = env.DB;
+    d = {
+      q: async (text, params = []) => (await prep(DB, text, params).all()).results.map(readRow),
+      // several statements in one database transaction (one round trip); returns the rows of each
+      tx: async (list) => (await DB.batch(list.map(([text, params = []]) => prep(DB, text, params))))
+        .map((r) => (r.results || []).map(readRow)),
+    };
+    dbCache.set(env.DB, d);
+  }
+  return d;
+}
+async function sha256Hex(s) {
+  const h = await crypto.subtle.digest('SHA-256', enc.encode(s));
+  return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 // ---------- automatic database setup ----------
@@ -141,9 +170,17 @@ function sqlStatements(text) {
   return text.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
     .split(/;\s*(?:\n|$)/).map((x) => x.trim()).filter(Boolean);
 }
+// Many rows go to D1 as one JSON list parameter (D1 allows only 100 parameters per statement) and are read back with json_each
+const fromJsonRows = (cols) => `SELECT ${cols.map((c) => (c === 'options'
+  ? `json(json_extract(value, '$.options'))` : `json_extract(value, '$.${c}')`) + ' AS ' + c).join(', ')} FROM json_each($1)`;
+const Q_COLS = ['question', 'options', 'correct_index', 'difficulty', 'category', 'explanation', 'topic', 'campaign', 'active'];
+const questionRow = (q) => ({
+  question: q.question, options: q.options, correct_index: q.correct, difficulty: q.difficulty, category: q.category || null,
+  explanation: q.explanation || null, topic: q.topic || null, campaign: q.campaign ? 1 : 0, active: q.active === false ? 0 : 1,
+});
 let lastUpgradeError = null;   // shown on /api/health
 async function ensureSchema(env, d) {
-  const key = env.__db || env.DATABASE_URL;
+  const key = env.DB;
   if (!schemaReady.has(key)) {
     schemaReady.set(key, (async () => {
       let current = 0;
@@ -152,63 +189,35 @@ async function ensureSchema(env, d) {
         current = Number(r[0]?.value) || 0;
         if (current >= SCHEMA_VERSION) return;
       } catch (e) {
-        if (!/does not exist/i.test(String(e?.message))) throw e;
+        if (!/no such table/i.test(String(e?.message))) throw e;
       }
-      // 1. tables and columns (small, idempotent statements)
-      for (const stmt of sqlStatements(SCHEMA_SQL)) await d.q(stmt);
-      // 2. question data. Only the questions that are actually missing are sent. If this step fails the
-      //    quiz keeps running on the questions it has, and /api/health shows the error.
+      // 1. tables (idempotent statements, one batch)
+      await d.tx(sqlStatements(SCHEMA_SQL).map((s) => [s]));
+      // 2. data. If this step fails the quiz keeps running on the questions it has, and /api/health shows the error.
+      //    Every step checks the stored version, so when two Worker instances upgrade at once only the first changes anything.
       try {
-        const existing = current < 5 ? new Set() : new Set((await d.q(`SELECT question FROM questions`)).map((r) => r.question));
-        // question batches added after the first release, and the schema version that adds them once
-        const BATCH_VERSION = { 'secretariat-valayal-2026': 7, 'question-mix-2026': 8 };
-        const wanted = existing.size === 0 ? SEED_QUESTIONS
-          : SEED_QUESTIONS.filter((q) => q.batch && BATCH_VERSION[q.batch] > current);
-        const missing = wanted.filter((q) => !existing.has(q.question));
-        const COLS = 'question, options, correct_index, difficulty, category, explanation, topic, campaign';
-        const version = `(SELECT coalesce(max((value #>> '{}')::int), 0) FROM settings WHERE key = 'schema_version')`;
-        const steps = [[`SELECT pg_advisory_xact_lock(7241001)`]];   // one Worker instance at a time
-        // v5: the English starter questions were replaced by the Malayalam question pool
-        if (current < 5) steps.push([`DELETE FROM questions WHERE ${version} < 5`]);
-        // v9: reworded starter questions replace their older wording (only where the admin has not edited the text)
-        const renamed = SEED_QUESTIONS.filter((q) => q.previous?.length);
-        if (current < 9 && existing.size && renamed.length) {
-          const olds = [], news = [], expls = [];
-          for (const q of renamed) for (const o of q.previous) { olds.push(o); news.push(q.question); expls.push(q.explanation || null); }
-          steps.push([`UPDATE questions q SET question = v.new_q, explanation = v.expl, updated_at = now()
-            FROM (SELECT unnest($1::text[]) AS old_q, unnest($2::text[]) AS new_q, unnest($3::text[]) AS expl) v
-            WHERE q.question = v.old_q AND ${version} < 9
-              AND NOT EXISTS (SELECT 1 FROM questions x WHERE x.question = v.new_q)`, [olds, news, expls]]);
+        const version = `(SELECT coalesce(max(CAST(value AS INTEGER)), 0) FROM settings WHERE key = 'schema_version')`;
+        const steps = [];
+        const existing = await d.q(`SELECT id, question FROM questions`);
+        // a new database gets the starter question pool
+        if (!existing.length) {
+          steps.push([`INSERT INTO questions (${Q_COLS}) ${fromJsonRows(Q_COLS)}
+            WHERE ${version} < ${SCHEMA_VERSION} AND NOT EXISTS (SELECT 1 FROM questions)`, [SEED_QUESTIONS.map(questionRow)]]);
         }
-        if (missing.length) {
-          const params = [];
-          const values = missing.map((q) => {
-            params.push(q.question, JSON.stringify(q.options), q.correct, q.difficulty, q.category || null,
-              q.explanation || null, q.topic || null, !!q.campaign);
-            const n = params.length;
-            return `($${n - 7}, $${n - 6}::jsonb, $${n - 5}::smallint, $${n - 4}, $${n - 3}, $${n - 2}, $${n - 1}, $${n}::boolean)`;
-          });
-          steps.push([`INSERT INTO questions (${COLS})
-            SELECT * FROM (VALUES ${values.join(',')}) v(${COLS})
-            WHERE ${version} < ${SCHEMA_VERSION} AND NOT EXISTS (SELECT 1 FROM questions q WHERE q.question = v.question)`, params]);
-        }
-        // v6: starter questions already in the database move to the Political category
-        if (current < 6 && existing.size) {
-          steps.push([`UPDATE questions SET category = 'Political', updated_at = now()
-            WHERE ${version} < 6 AND question = ANY($1::text[])`, [SEED_QUESTIONS.filter((q) => !q.batch).map((q) => q.question)]]);
-        }
-        // v12: back to the 1.9.1 quiz after v10–v11 (2.x). The tables are put back by the schema above; here the
-        // questions v10 hid are shown again and the starter bonus questions get their campaign flag back
+        // v12: back to the 1.9.1 quiz after v10–v11 (2.x): Thiruvananthapuram is North/South again, the questions
+        // v10 hid are shown again and the starter bonus questions get their campaign flag back
         if (current >= 10 && current < 12) {
-          steps.push([`UPDATE questions SET active = true, updated_at = now()
-            WHERE ${version} < 12 AND encode(sha256(convert_to(question, 'UTF8')), 'hex') = ANY($1::text[])`, [RETIRED_QUESTIONS]]);
-          steps.push([`UPDATE questions SET campaign = true, updated_at = now()
-            WHERE ${version} < 12 AND question = ANY($1::text[])`, [SEED_QUESTIONS.filter((q) => q.campaign).map((q) => q.question)]]);
+          const hidden = [];
+          for (const q of existing) if (RETIRED_QUESTIONS.includes(await sha256Hex(q.question))) hidden.push(q.id);
+          steps.push([`UPDATE players SET district = 'Thiruvananthapuram North' WHERE ${version} < 12 AND district = 'Thiruvananthapuram'`]);
+          steps.push([`UPDATE questions SET active = 1, updated_at = ${NOW}
+            WHERE ${version} < 12 AND id IN (SELECT value FROM json_each($1))`, [hidden]]);
+          steps.push([`UPDATE questions SET campaign = 1, updated_at = ${NOW}
+            WHERE ${version} < 12 AND question IN (SELECT value FROM json_each($1))`, [SEED_QUESTIONS.filter((q) => q.campaign).map((q) => q.question)]]);
         }
-        steps.push([`INSERT INTO settings (key, value) VALUES ('schema_version', $1::jsonb)
-          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify(SCHEMA_VERSION)]]);
-        if (d.tx) await d.tx(steps);
-        else for (const [t, p] of steps) await d.q(t, p);
+        steps.push([`INSERT INTO settings (key, value) VALUES ('schema_version', $1)
+          ON CONFLICT (key) DO UPDATE SET value = excluded.value`, [JSON.stringify(SCHEMA_VERSION)]]);
+        await d.tx(steps);
         lastUpgradeError = null;
       } catch (e) {
         console.error('question upgrade failed', e);
@@ -219,13 +228,11 @@ async function ensureSchema(env, d) {
   return schemaReady.get(key);
 }
 
-// Turns low-level database errors into a message the admin can act on (never includes the password)
+// Turns low-level database errors into a message the admin can act on
 function explainDbError(e) {
   const m = String(e?.message || e || '');
-  if (/password authentication failed|role .* does not exist/i.test(m)) return 'Database login failed. Copy the connection string from Neon again and update DATABASE_URL in Cloudflare.';
-  if (/database .* does not exist/i.test(m)) return 'The database named in DATABASE_URL does not exist. Copy the connection string from Neon again.';
-  if (/connection string|ENOTFOUND|getaddrinfo|fetch failed|Failed to fetch|network|endpoint .* (does not exist|is disabled)|could not translate host/i.test(m)) return 'Could not reach the Neon database. Check DATABASE_URL in Cloudflare and that the Neon project is active.';
-  if (/does not exist/i.test(m)) return 'The database tables are missing or out of date. Open /api/health once to set them up.';
+  if (/no such table|no such column/i.test(m)) return 'The database tables are missing or out of date. Open /api/health once to set them up.';
+  if (/D1_ERROR|D1 DB|database .* (not found|unavailable)|overloaded/i.test(m)) return 'The D1 database could not be reached. Check the DB binding in wrangler.toml and try again in a minute.';
   return null;
 }
 function secret(env) {
@@ -275,14 +282,15 @@ async function requireAdmin(env, req) {
 // ---------- leaderboard ----------
 function boardCte(withDistrict) {
   return `
-    WITH best AS (
-      SELECT DISTINCT ON (g.player_id) g.player_id, g.id AS game_id, g.score, g.total_ms, g.correct_count, g.finished_at
+    WITH games_ranked AS (
+      SELECT g.player_id, g.id AS game_id, g.score, g.total_ms, g.correct_count, g.finished_at,
+        ROW_NUMBER() OVER (PARTITION BY g.player_id ORDER BY g.score DESC, g.total_ms ASC, g.finished_at ASC) AS n
       FROM games g JOIN players p ON p.id = g.player_id
       WHERE g.status = 'finished' ${withDistrict ? 'AND p.district = $1' : ''}
-      ORDER BY g.player_id, g.score DESC, g.total_ms ASC, g.finished_at ASC
     ),
+    best AS (SELECT player_id, game_id, score, total_ms, correct_count, finished_at FROM games_ranked WHERE n = 1),
     ranked AS (
-      SELECT best.*, ROW_NUMBER() OVER (ORDER BY score DESC, total_ms ASC, finished_at ASC)::int AS rank
+      SELECT best.*, ROW_NUMBER() OVER (ORDER BY score DESC, total_ms ASC, finished_at ASC) AS rank
       FROM best
     )`;
 }
@@ -296,7 +304,7 @@ async function leaderboard(d, district, playerId, env = null) {
         SELECT r.rank, r.player_id, r.score, r.total_ms, r.correct_count, p.name, p.office, p.district, p.area
         FROM ranked r JOIN players p ON p.id = r.player_id
         ORDER BY r.rank LIMIT 10`, params),
-      d.q(`${boardCte(!!district)} SELECT count(*)::int AS n FROM ranked`, params),
+      d.q(`${boardCte(!!district)} SELECT count(*) AS n FROM ranked`, params),
       district || !env ? null : playCount(d), // the play count is only shown on the opening screen
     ]);
     return { top, total: totalRow[0]?.n || 0, plays };
@@ -330,8 +338,8 @@ async function apiConfig(env) {
 async function configData(env) {
   const d = db(env);
   const s = await getSettings(d);
-  const counts = await d.q(`SELECT difficulty, count(*) FILTER (WHERE NOT campaign)::int AS n,
-    count(*) FILTER (WHERE campaign)::int AS c FROM questions WHERE active GROUP BY difficulty`);
+  const counts = await d.q(`SELECT difficulty, count(*) FILTER (WHERE NOT campaign) AS n,
+    count(*) FILTER (WHERE campaign) AS c FROM questions WHERE active GROUP BY difficulty`);
   const avail = Object.fromEntries(counts.map((c) => [c.difficulty, c.n]));
   const total = LEVELS.reduce((t, l) => t + Math.min(s[l], avail[l] || 0), 0);
   const hasBonus = s.bonusQuestion !== false && counts.some((c) => c.c > 0);
@@ -363,14 +371,14 @@ async function apiRegister(env, req) {
   }
   const rows = await d.q(
     `INSERT INTO players (name, office, district, area, phone) VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name, office = EXCLUDED.office,
-       district = EXCLUDED.district, area = EXCLUDED.area, updated_at = now()
-     RETURNING id, name, office, district, area, phone, (xmax = 0) AS created`,
+     ON CONFLICT (phone) DO UPDATE SET name = excluded.name, office = excluded.office,
+       district = excluded.district, area = excluded.area, updated_at = ${NOW}
+     RETURNING id, name, office, district, area, phone, created_at = updated_at AS created`,
     [name, office, district, area, phone]);
   const p = rows[0];
   if (p.created) memoClear(env); // a new player card counts as a play straight away
   const stats = await d.q(
-    `SELECT count(*) FILTER (WHERE status <> 'void')::int AS played, max(score) FILTER (WHERE status = 'finished') AS best
+    `SELECT count(*) FILTER (WHERE status <> 'void') AS played, max(score) FILTER (WHERE status = 'finished') AS best
      FROM games WHERE player_id = $1`, [p.id]);
   return json({
     playerKey: await playerKey(env, p.id),
@@ -446,26 +454,26 @@ async function apiStart(env, req) {
 
   // Resume an unfinished recent game instead of starting a fresh one
   const open = await d.q(
-    `SELECT id, cardinality(question_ids) AS total, current_index FROM games
-     WHERE player_id = $1 AND status = 'playing' AND started_at > now() - interval '${RESUME_WINDOW}'
+    `SELECT id, json_array_length(question_ids) AS total, current_index FROM games
+     WHERE player_id = $1 AND status = 'playing' AND started_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '${RESUME_WINDOW}')
      ORDER BY started_at DESC LIMIT 1`, [pid]);
   if (open[0]) return json({ gameId: open[0].id, total: open[0].total, index: open[0].current_index, resumed: true });
 
   if (s.maxAttempts > 0) {
-    const c = await d.q(`SELECT count(*)::int AS n FROM games WHERE player_id = $1 AND status <> 'void'`, [pid]);
+    const c = await d.q(`SELECT count(*) AS n FROM games WHERE player_id = $1 AND status <> 'void'`, [pid]);
     if (c[0].n >= s.maxAttempts) fail(403, `You have used all ${s.maxAttempts} attempts. Your best score is on the board.`);
   }
 
   const pool = shuffle(await d.q(
-    `SELECT id, difficulty, category, topic, campaign, jsonb_array_length(options)::int AS n FROM questions WHERE active`));
+    `SELECT id, difficulty, category, topic, campaign, json_array_length(options) AS n FROM questions WHERE active`));
   const picked = pickQuestions(pool, s);
   if (!picked.length) fail(503, 'No questions are available yet.');
   const nById = Object.fromEntries(pool.map((x) => [x.id, x.n]));
   const orders = picked.map((id) => shuffle([...Array(nById[id]).keys()]));
   const config = { limitMs: s.timeLimitSec * 1000, points: s.points, penalty: s.penalty, streakBonus: s.streakBonus, streakCap: s.streakCap, showExplanation: s.showExplanation };
   const g = await d.q(
-    `INSERT INTO games (player_id, question_ids, option_orders, config) VALUES ($1, $2::int[], $3::jsonb, $4::jsonb) RETURNING id`,
-    [pid, picked, JSON.stringify(orders), JSON.stringify(config)]);
+    `INSERT INTO games (id, player_id, question_ids, option_orders, config) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+    [crypto.randomUUID(), pid, picked, orders, config]);
   return json({ gameId: g[0].id, total: picked.length, index: 0, resumed: false });
 }
 
@@ -473,7 +481,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 async function loadGame(d, gameId, pid) {
   if (!UUID.test(String(gameId))) fail(400, 'Unknown game.');
   const r = await d.q(
-    `SELECT g.*, (EXTRACT(EPOCH FROM (now() - g.served_at)) * 1000)::int AS elapsed
+    `SELECT g.*, ${MS_SINCE('g.served_at')} AS elapsed
      FROM games g WHERE g.id = $1 AND g.player_id = $2`, [gameId, pid]);
   if (!r[0]) fail(404, 'Game not found.');
   return r[0];
@@ -486,24 +494,24 @@ async function apiNext(env, req) {
   const d = db(env);
   if (!UUID.test(String(b.gameId))) fail(400, 'Unknown game.');
   // One round trip: start the clock if this question isn't served yet, and read the game with its question.
-  // The SELECT sees the row as it was before the UPDATE, so a question served just now has elapsed 0.
-  const r = await d.q(
-    `WITH serve AS (
-       UPDATE games SET served_at = now()
-       WHERE id = $1 AND player_id = $2 AND status = 'playing' AND served_at IS NULL AND current_index < cardinality(question_ids)
-       RETURNING id)
-     SELECT g.status, g.current_index, g.question_ids, g.option_orders, g.config, g.score, g.streak, g.id,
-       (EXTRACT(EPOCH FROM (now() - coalesce(g.served_at, now()))) * 1000)::int AS elapsed,
+  // A question served just now has elapsed (about) 0.
+  const [, r] = await d.tx([
+    [`UPDATE games SET served_at = ${NOW}
+      WHERE id = $1 AND player_id = $2 AND status = 'playing' AND served_at IS NULL AND current_index < json_array_length(question_ids)`,
+    [b.gameId, pid]],
+    [`SELECT g.status, g.current_index, g.question_ids, g.option_orders, g.config, g.score, g.streak, g.id,
+       ${MS_SINCE('g.served_at')} AS elapsed,
        q.id AS q_id, q.question, q.options, q.difficulty, q.category, q.campaign
-     FROM games g LEFT JOIN questions q ON q.id = g.question_ids[g.current_index + 1]
-     WHERE g.id = $1 AND g.player_id = $2`, [b.gameId, pid]);
+     FROM games g LEFT JOIN questions q ON q.id = json_extract(g.question_ids, '$[' || g.current_index || ']')
+     WHERE g.id = $1 AND g.player_id = $2`, [b.gameId, pid]],
+  ]);
   const g = r[0];
   if (!g) fail(404, 'Game not found.');
   if (g.status !== 'playing' || g.current_index >= g.question_ids.length) return json({ done: true });
   const idx = g.current_index;
   const q = g.q_id ? g : null;
   if (!q) { // question was deleted while this game was in progress
-    await d.q(`UPDATE games SET status = 'void', finished_at = now() WHERE id = $1`, [g.id]);
+    await d.q(`UPDATE games SET status = 'void', finished_at = ${NOW} WHERE id = $1`, [g.id]);
     fail(409, 'The questions were updated. Start a new game.');
   }
   const order = g.option_orders[idx];
@@ -526,9 +534,9 @@ async function apiAnswer(env, req) {
   const d = db(env);
   if (!UUID.test(String(b.gameId))) fail(400, 'Unknown game.');
   const r = await d.q(
-    `SELECT g.*, (EXTRACT(EPOCH FROM (now() - g.served_at)) * 1000)::int AS elapsed,
+    `SELECT g.*, ${MS_SINCE('g.served_at')} AS elapsed,
        q.id AS q_id, q.correct_index, q.difficulty AS q_difficulty, q.explanation, q.campaign
-     FROM games g LEFT JOIN questions q ON q.id = g.question_ids[g.current_index + 1]
+     FROM games g LEFT JOIN questions q ON q.id = json_extract(g.question_ids, '$[' || g.current_index || ']')
      WHERE g.id = $1 AND g.player_id = $2`, [b.gameId, pid]);
   const g = r[0];
   if (!g) fail(404, 'Game not found.');
@@ -538,7 +546,7 @@ async function apiAnswer(env, req) {
   const qid = g.question_ids[idx];
   const q = g.q_id ? { correct_index: g.correct_index, difficulty: g.q_difficulty, explanation: g.explanation, campaign: g.campaign } : null;
   if (!q) {
-    await d.q(`UPDATE games SET status = 'void', finished_at = now() WHERE id = $1`, [g.id]);
+    await d.q(`UPDATE games SET status = 'void', finished_at = ${NOW} WHERE id = $1`, [g.id]);
     fail(409, 'The questions were updated. Start a new game.');
   }
   // the campaign bonus question (last question) never takes marks away
@@ -568,22 +576,21 @@ async function apiAnswer(env, req) {
   const points = correct ? base + speed + streakPts : -penalty;
   const done = idx + 1 >= g.question_ids.length;
 
-  // One round trip: move the game on and record the answer (the answer row is written only if the move succeeded)
-  const upd = await d.q(
-    `WITH u AS (
-       UPDATE games SET current_index = $3, served_at = NULL, score = score + $4,
+  // One round trip, one transaction: move the game on and record the answer. Only the request that moved the game
+  // gets a score back; a second answer to the same question finds the game already moved on, and its answer row
+  // (same game and question number) is ignored.
+  const params = [g.id, idx, idx + 1, points, correct ? 1 : 0, timeMs, streak, done, qid, chosenOrig, correct, skipped];
+  const [upd] = await d.tx([
+    [`UPDATE games SET current_index = $3, served_at = NULL, score = score + $4,
          correct_count = correct_count + $5, total_ms = total_ms + $6, streak = $7,
-         best_streak = GREATEST(best_streak, $7),
+         best_streak = max(best_streak, $7),
          status = CASE WHEN $8 THEN 'finished' ELSE status END,
-         finished_at = CASE WHEN $8 THEN now() ELSE finished_at END
+         finished_at = CASE WHEN $8 THEN ${NOW} ELSE finished_at END
        WHERE id = $1 AND current_index = $2 AND status = 'playing'
-       RETURNING id, score),
-     a AS (
-       INSERT INTO answers (game_id, q_index, question_id, chosen_index, is_correct, time_ms, points, skipped)
-       SELECT u.id, $2::int, $9::int, $10::smallint, $11::boolean, $6::int, $4::int, $12::boolean FROM u
-       ON CONFLICT DO NOTHING)
-     SELECT score FROM u`,
-    [g.id, idx, idx + 1, points, correct ? 1 : 0, timeMs, streak, done, qid, chosenOrig, correct, skipped]);
+       RETURNING id, score`, params],
+    [`INSERT OR IGNORE INTO answers (game_id, q_index, question_id, chosen_index, is_correct, time_ms, points, skipped)
+       SELECT id, $2, $9, $10, $11, $6, $4, $12 FROM games WHERE id = $1 AND current_index = $3`, params],
+  ]);
   if (!upd[0]) fail(409, 'That question was already answered.');
   if (done) memoClear(env); // the new score shows on the leaderboard straight away
 
@@ -607,7 +614,7 @@ async function apiResult(env, req) {
     d.q(`SELECT p.name, p.district,
         (SELECT id FROM games WHERE player_id = p.id AND status = 'finished'
          ORDER BY score DESC, total_ms ASC, finished_at ASC LIMIT 1) AS best_id,
-        (SELECT count(*)::int FROM games WHERE player_id = p.id AND status <> 'void') AS played
+        (SELECT count(*) FROM games WHERE player_id = p.id AND status <> 'void') AS played
       FROM players p WHERE p.id = $1`, [pid]),
   ]);
   if (g.status === 'playing') fail(409, 'Finish the game first.');
@@ -665,49 +672,49 @@ async function adminStats(env) {
   const d = db(env);
   const [totals] = await d.q(`
     SELECT
-      (SELECT count(*)::int FROM players) AS players,
-      (SELECT count(*)::int FROM players WHERE created_at > now() - interval '24 hours') AS players_24h,
-      (SELECT count(*)::int FROM games) AS games,
-      (SELECT count(*)::int FROM games WHERE status = 'finished') AS finished,
-      (SELECT count(*)::int FROM games WHERE started_at > now() - interval '24 hours') AS games_24h,
-      (SELECT coalesce(round(avg(score)), 0)::int FROM games WHERE status = 'finished') AS avg_score,
-      (SELECT coalesce(max(score), 0)::int FROM games WHERE status = 'finished') AS top_score,
-      (SELECT coalesce(round(avg(correct_count)::numeric, 1), 0)::float FROM games WHERE status = 'finished') AS avg_correct,
-      (SELECT coalesce(round(avg(cardinality(question_ids))::numeric, 1), 10)::float FROM games WHERE status = 'finished') AS avg_total,
-      (SELECT count(*)::int FROM questions WHERE active) AS active_questions`);
+      (SELECT count(*) FROM players) AS players,
+      (SELECT count(*) FROM players WHERE created_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')) AS players_24h,
+      (SELECT count(*) FROM games) AS games,
+      (SELECT count(*) FROM games WHERE status = 'finished') AS finished,
+      (SELECT count(*) FROM games WHERE started_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-24 hours')) AS games_24h,
+      (SELECT coalesce(round(avg(score)), 0) FROM games WHERE status = 'finished') AS avg_score,
+      (SELECT coalesce(max(score), 0) FROM games WHERE status = 'finished') AS top_score,
+      (SELECT coalesce(round(avg(correct_count), 1), 0) FROM games WHERE status = 'finished') AS avg_correct,
+      (SELECT coalesce(round(avg(json_array_length(question_ids)), 1), 10) FROM games WHERE status = 'finished') AS avg_total,
+      (SELECT count(*) FROM questions WHERE active) AS active_questions`);
   const byDistrict = await d.q(`
-    SELECT p.district, count(DISTINCT p.id)::int AS players,
-      count(g.id) FILTER (WHERE g.status = 'finished')::int AS games,
-      coalesce(round(avg(g.score) FILTER (WHERE g.status = 'finished')), 0)::int AS avg_score,
-      coalesce(max(g.score) FILTER (WHERE g.status = 'finished'), 0)::int AS top_score
+    SELECT p.district, count(DISTINCT p.id) AS players,
+      count(g.id) FILTER (WHERE g.status = 'finished') AS games,
+      coalesce(round(avg(g.score) FILTER (WHERE g.status = 'finished')), 0) AS avg_score,
+      coalesce(max(g.score) FILTER (WHERE g.status = 'finished'), 0) AS top_score
     FROM players p LEFT JOIN games g ON g.player_id = p.id
     GROUP BY p.district ORDER BY players DESC`);
   const byArea = await d.q(`
-    SELECT p.district, p.area, count(DISTINCT p.id)::int AS players,
-      count(g.id) FILTER (WHERE g.status = 'finished')::int AS games,
-      coalesce(round(avg(g.score) FILTER (WHERE g.status = 'finished')), 0)::int AS avg_score,
-      coalesce(max(g.score) FILTER (WHERE g.status = 'finished'), 0)::int AS top_score
+    SELECT p.district, p.area, count(DISTINCT p.id) AS players,
+      count(g.id) FILTER (WHERE g.status = 'finished') AS games,
+      coalesce(round(avg(g.score) FILTER (WHERE g.status = 'finished')), 0) AS avg_score,
+      coalesce(max(g.score) FILTER (WHERE g.status = 'finished'), 0) AS top_score
     FROM players p LEFT JOIN games g ON g.player_id = p.id
     GROUP BY p.district, p.area`);
   const areas = await getAreas(d);
   const daily = await d.q(`
-    SELECT to_char(date_trunc('day', started_at AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD') AS day,
-      count(*)::int AS games, count(*) FILTER (WHERE status = 'finished')::int AS finished,
-      count(DISTINCT player_id)::int AS players
-    FROM games WHERE started_at > now() - interval '30 days' GROUP BY 1 ORDER BY 1`);
+    SELECT strftime('%Y-%m-%d', started_at, '+330 minutes') AS day,
+      count(*) AS games, count(*) FILTER (WHERE status = 'finished') AS finished,
+      count(DISTINCT player_id) AS players
+    FROM games WHERE started_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days') GROUP BY 1 ORDER BY 1`);
   const hourly = await d.q(`
-    SELECT extract(hour FROM started_at AT TIME ZONE 'Asia/Kolkata')::int AS hour, count(*)::int AS games
+    SELECT CAST(strftime('%H', started_at, '+330 minutes') AS INTEGER) AS hour, count(*) AS games
     FROM games GROUP BY 1 ORDER BY 1`);
   const byLevel = await d.q(`
-    SELECT q.difficulty, count(*)::int AS attempts,
-      coalesce(round(100.0 * avg(a.is_correct::int)), 0)::int AS accuracy,
-      coalesce(round(avg(a.time_ms)), 0)::int AS avg_ms
+    SELECT q.difficulty, count(*) AS attempts,
+      coalesce(round(100.0 * avg(a.is_correct)), 0) AS accuracy,
+      coalesce(round(avg(a.time_ms)), 0) AS avg_ms
     FROM answers a JOIN questions q ON q.id = a.question_id GROUP BY q.difficulty`);
   const spread = await d.q(`
-    SELECT correct_count AS correct, count(*)::int AS games FROM games WHERE status = 'finished' GROUP BY 1 ORDER BY 1`);
+    SELECT correct_count AS correct, count(*) AS games FROM games WHERE status = 'finished' GROUP BY 1 ORDER BY 1`);
   const hardest = await d.q(`
-    SELECT q.id, q.question, q.difficulty, count(*)::int AS attempts,
-      round(100.0 * avg(a.is_correct::int))::int AS accuracy
+    SELECT q.id, q.question, q.difficulty, count(*) AS attempts,
+      round(100.0 * avg(a.is_correct)) AS accuracy
     FROM answers a JOIN questions q ON q.id = a.question_id
     GROUP BY q.id HAVING count(*) >= 3 ORDER BY accuracy ASC, attempts DESC LIMIT 8`);
   return json({ totals, byDistrict, byArea, areas, daily, hourly, byLevel, spread, hardest, districts: DISTRICTS });
@@ -734,23 +741,23 @@ function validateQuestion(b) {
 async function adminQuestions(env) {
   const rows = await db(env).q(`
     SELECT q.id, q.question, q.options, q.correct_index, q.difficulty, q.category, q.topic, q.campaign, q.explanation, q.active, q.updated_at,
-      count(a.question_id)::int AS attempts,
-      coalesce(round(100.0 * avg(a.is_correct::int)), 0)::int AS accuracy,
-      coalesce(round(avg(a.time_ms)), 0)::int AS avg_ms,
-      count(*) FILTER (WHERE a.skipped)::int AS skipped
+      count(a.question_id) AS attempts,
+      coalesce(round(100.0 * avg(a.is_correct)), 0) AS accuracy,
+      coalesce(round(avg(a.time_ms)), 0) AS avg_ms,
+      count(*) FILTER (WHERE a.skipped) AS skip_count
     FROM questions q LEFT JOIN answers a ON a.question_id = q.id
     GROUP BY q.id ORDER BY q.id DESC`);
-  return json({ questions: rows });
+  return json({ questions: rows.map(({ skip_count, ...q }) => ({ ...q, skipped: skip_count })) });
 }
 async function adminSaveQuestion(env, req, id) {
   const v = validateQuestion(await body(req));
   const d = db(env);
   const params = [v.question, JSON.stringify(v.options), v.correct, v.difficulty, v.category, v.explanation, v.active, v.topic, v.campaign];
   const r = id
-    ? await d.q(`UPDATE questions SET question = $1, options = $2::jsonb, correct_index = $3, difficulty = $4, category = $5,
-        explanation = $6, active = $7, topic = $8, campaign = $9, updated_at = now() WHERE id = $10 RETURNING id`, [...params, id])
+    ? await d.q(`UPDATE questions SET question = $1, options = $2, correct_index = $3, difficulty = $4, category = $5,
+        explanation = $6, active = $7, topic = $8, campaign = $9, updated_at = ${NOW} WHERE id = $10 RETURNING id`, [...params, id])
     : await d.q(`INSERT INTO questions (question, options, correct_index, difficulty, category, explanation, active, topic, campaign)
-        VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8, $9) RETURNING id`, params);
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`, params);
   if (!r[0]) fail(404, 'Question not found.');
   return json({ id: r[0].id });
 }
@@ -758,7 +765,7 @@ async function adminDeleteQuestion(env, id) {
   const d = db(env);
   const used = await d.q(`SELECT 1 FROM answers WHERE question_id = $1 LIMIT 1`, [id]);
   if (used[0]) {
-    await d.q(`UPDATE questions SET active = false, updated_at = now() WHERE id = $1`, [id]);
+    await d.q(`UPDATE questions SET active = false, updated_at = ${NOW} WHERE id = $1`, [id]);
     return json({ deactivated: true });
   }
   await d.q(`DELETE FROM questions WHERE id = $1`, [id]);
@@ -776,24 +783,22 @@ async function adminImport(env, req) {
   const d = db(env);
   const existing = await d.q(`SELECT id, question FROM questions`);
   const ids = new Set(existing.map((r) => r.id)), byText = new Map(existing.map((r) => [r.question.trim(), r.id]));
-  const steps = [], seen = new Set();
-  let added = 0, updated = 0;
+  const updates = [], inserts = [], seen = new Set();
   for (const v of vs) {
     const id = v.id && ids.has(v.id) ? v.id : byText.get(v.question) ?? null;
-    const params = [v.question, JSON.stringify(v.options), v.correct, v.difficulty, v.category, v.explanation, v.active, v.topic, v.campaign];
     if (id) {
       if (seen.has(id)) fail(400, `Question ${id} is in the file twice ("${v.question.slice(0, 40)}").`);
-      seen.add(id); updated++;
-      steps.push([`UPDATE questions SET question = $1, options = $2::jsonb, correct_index = $3, difficulty = $4, category = $5,
-        explanation = $6, active = $7, topic = $8, campaign = $9, updated_at = now() WHERE id = $10`, [...params, id]]);
-    } else {
-      added++;
-      steps.push([`INSERT INTO questions (question, options, correct_index, difficulty, category, explanation, active, topic, campaign)
-        VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8, $9)`, params]);
-    }
+      seen.add(id);
+      updates.push({ id, ...questionRow(v) });
+    } else inserts.push(questionRow(v));
   }
-  if (d.tx) await d.tx(steps); else for (const [q, p] of steps) await d.q(q, p);
-  return json({ imported: vs.length, added, updated });
+  // two statements whatever the size of the file
+  await d.tx([
+    [`UPDATE questions SET ${Q_COLS.map((c) => `${c} = v.${c}`).join(', ')}, updated_at = ${NOW}
+      FROM (${fromJsonRows(['id', ...Q_COLS])}) AS v WHERE questions.id = v.id`, [updates]],
+    [`INSERT INTO questions (${Q_COLS}) ${fromJsonRows(Q_COLS)}`, [inserts]],
+  ]);
+  return json({ imported: vs.length, added: inserts.length, updated: updates.length });
 }
 
 async function adminPlayers(env, url) {
@@ -802,12 +807,12 @@ async function adminPlayers(env, url) {
   const area = url.searchParams.get('area') || '';
   const page = Math.max(0, Number(url.searchParams.get('page')) || 0);
   const like = `%${search}%`;
-  const where = `($1 = '' OR p.name ILIKE $2 OR p.office ILIKE $2 OR p.phone LIKE $2 OR p.area ILIKE $2)
+  const where = `($1 = '' OR p.name LIKE $2 OR p.office LIKE $2 OR p.phone LIKE $2 OR p.area LIKE $2)
     AND ($3 = '' OR p.district = $3) AND ($4 = '' OR coalesce(p.area, '') = $4)`;
   const d = db(env);
   const rows = await d.q(`
     SELECT p.id, p.name, p.office, p.district, p.area, p.phone, p.created_at,
-      count(g.id) FILTER (WHERE g.status <> 'void')::int AS games,
+      count(g.id) FILTER (WHERE g.status <> 'void') AS games,
       max(g.score) FILTER (WHERE g.status = 'finished') AS best,
       max(g.correct_count) FILTER (WHERE g.status = 'finished') AS best_correct,
       max(g.started_at) AS last_played
@@ -815,7 +820,7 @@ async function adminPlayers(env, url) {
     WHERE ${where}
     GROUP BY p.id ORDER BY best DESC NULLS LAST, p.created_at DESC
     LIMIT 50 OFFSET $5`, [search, like, district, area, page * 50]);
-  const total = await d.q(`SELECT count(*)::int AS n FROM players p WHERE ${where}`, [search, like, district, area]);
+  const total = await d.q(`SELECT count(*) AS n FROM players p WHERE ${where}`, [search, like, district, area]);
   return json({ players: rows, total: total[0].n, page });
 }
 async function adminPlayer(env, id) {
@@ -823,7 +828,7 @@ async function adminPlayer(env, id) {
   const p = (await d.q(`SELECT * FROM players WHERE id = $1`, [id]))[0];
   if (!p) fail(404, 'Player not found.');
   const games = await d.q(`
-    SELECT id, score, correct_count, cardinality(question_ids) AS total, total_ms, best_streak, status, started_at, finished_at
+    SELECT id, score, correct_count, json_array_length(question_ids) AS total, total_ms, best_streak, status, started_at, finished_at
     FROM games WHERE player_id = $1 ORDER BY started_at DESC`, [id]);
   const answers = await d.q(`
     SELECT a.game_id, a.q_index, a.is_correct, a.skipped, a.time_ms, a.points, a.chosen_index, q.question, q.options, q.correct_index, q.difficulty
@@ -843,7 +848,7 @@ async function adminSetGameStatus(env, id, status) {
 async function adminAreas(env) {
   const rows = await db(env).q(`
     SELECT a.id, a.district, a.name,
-      (SELECT count(*)::int FROM players p WHERE p.district = a.district AND p.area = a.name) AS players
+      (SELECT count(*) FROM players p WHERE p.district = a.district AND p.area = a.name) AS players
     FROM areas a ORDER BY a.district, lower(a.name)`);
   return json({ districts: DISTRICTS, areas: rows });
 }
@@ -855,7 +860,7 @@ async function adminAddAreas(env, req) {
   if (!names.length) fail(400, 'Type at least one area name.');
   if (names.length > 200) fail(400, 'Add up to 200 areas at a time.');
   const r = await db(env).q(
-    `INSERT INTO areas (district, name) SELECT $1, unnest($2::text[])
+    `INSERT INTO areas (district, name) SELECT $1, value FROM json_each($2) WHERE true
      ON CONFLICT (district, name) DO NOTHING RETURNING id`, [district, names]);
   return json({ added: r.length, skipped: names.length - r.length });
 }
@@ -871,7 +876,7 @@ async function adminRenameArea(env, req, id) {
   }
   await d.q(`UPDATE areas SET name = $2 WHERE id = $1`, [id, name]);
   const moved = await d.q(
-    `UPDATE players SET area = $3, updated_at = now() WHERE district = $1 AND area = $2 RETURNING id`,
+    `UPDATE players SET area = $3, updated_at = ${NOW} WHERE district = $1 AND area = $2 RETURNING id`,
     [cur.district, cur.name, name]);
   return json({ ok: true, playersUpdated: moved.length });
 }
@@ -895,12 +900,12 @@ async function adminExport(env, url) {
     head = ['Game', 'Name', 'Office', 'District', 'Area', 'Phone', 'Status', 'Score', 'Correct', 'Wrong', 'Skipped', 'Marks lost', 'Questions', 'Time (s)', 'Best streak', 'Started', 'Finished'];
     const r = await d.q(`
       SELECT g.id, p.name, p.office, p.district, p.area, p.phone, g.status, g.score, g.correct_count,
-        (SELECT count(*) FROM answers a WHERE a.game_id = g.id AND NOT a.is_correct AND NOT a.skipped AND a.chosen_index IS NOT NULL)::int AS wrong,
-        (SELECT count(*) FROM answers a WHERE a.game_id = g.id AND a.skipped)::int AS skipped,
-        (SELECT coalesce(-sum(a.points) FILTER (WHERE a.points < 0), 0) FROM answers a WHERE a.game_id = g.id)::int AS lost,
-        cardinality(g.question_ids) AS total, g.total_ms, g.best_streak, g.started_at, g.finished_at
+        (SELECT count(*) FROM answers a WHERE a.game_id = g.id AND NOT a.is_correct AND NOT a.skipped AND a.chosen_index IS NOT NULL) AS wrong,
+        (SELECT count(*) FROM answers a WHERE a.game_id = g.id AND a.skipped) AS skip_count,
+        (SELECT coalesce(-sum(a.points) FILTER (WHERE a.points < 0), 0) FROM answers a WHERE a.game_id = g.id) AS lost,
+        json_array_length(g.question_ids) AS total, g.total_ms, g.best_streak, g.started_at, g.finished_at
       FROM games g JOIN players p ON p.id = g.player_id ORDER BY g.started_at DESC`);
-    rows = r.map((x) => [x.id, x.name, x.office, x.district, x.area, x.phone, x.status, x.score, x.correct_count, x.wrong, x.skipped, x.lost, x.total, (x.total_ms / 1000).toFixed(1), x.best_streak, x.started_at, x.finished_at]);
+    rows = r.map((x) => [x.id, x.name, x.office, x.district, x.area, x.phone, x.status, x.score, x.correct_count, x.wrong, x.skip_count, x.lost, x.total, (x.total_ms / 1000).toFixed(1), x.best_streak, x.started_at, x.finished_at]);
   } else if (type === 'questions') {
     head = ['id', 'difficulty', 'category', 'topic', 'campaign', 'question', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'option_f', 'correct', 'explanation', 'active'];
     const r = await d.q(`SELECT * FROM questions ORDER BY id`);
@@ -912,7 +917,7 @@ async function adminExport(env, url) {
     head = ['Name', 'Office', 'District', 'Area', 'Phone', 'Registered', 'Games', 'Best score'];
     const r = await d.q(`
       SELECT p.name, p.office, p.district, p.area, p.phone, p.created_at,
-        count(g.id) FILTER (WHERE g.status <> 'void')::int AS games, max(g.score) FILTER (WHERE g.status = 'finished') AS best
+        count(g.id) FILTER (WHERE g.status <> 'void') AS games, max(g.score) FILTER (WHERE g.status = 'finished') AS best
       FROM players p LEFT JOIN games g ON g.player_id = p.id GROUP BY p.id ORDER BY p.created_at`);
     rows = r.map((x) => [x.name, x.office, x.district, x.area, x.phone, x.created_at, x.games, x.best]);
   }
@@ -968,8 +973,8 @@ async function adminSettings(env, req) {
     })(),
   };
   if (next.easy + next.medium + next.hard < 1) fail(400, 'A game needs at least one question.');
-  await d.q(`INSERT INTO settings (key, value) VALUES ('game', $1::jsonb)
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify(next)]);
+  await d.q(`INSERT INTO settings (key, value) VALUES ('game', $1)
+    ON CONFLICT (key) DO UPDATE SET value = excluded.value`, [JSON.stringify(next)]);
   return json(next);
 }
 
@@ -1011,7 +1016,7 @@ async function rateLimit(env, kind, key) {
 // the same answer is reused for a few seconds instead of reading the database each time.
 const memoStore = new Map(); // per database
 async function memo(env, key, ms, fn) {
-  const dbKey = env.__db || env.DATABASE_URL;
+  const dbKey = env.DB;
   let m = memoStore.get(dbKey);
   if (!m) memoStore.set(dbKey, (m = new Map()));
   const hit = m.get(key);
@@ -1020,7 +1025,7 @@ async function memo(env, key, ms, fn) {
   m.set(key, { value, until: Date.now() + ms });
   return value;
 }
-const memoClear = (env) => memoStore.delete(env.__db || env.DATABASE_URL);
+const memoClear = (env) => memoStore.delete(env.DB);
 
 // ---------- router ----------
 async function route(req, env) {
@@ -1041,13 +1046,13 @@ async function route(req, env) {
   if (p === '/api/health' && m === 'GET') {
     try {
       const d = db(env);
-      schemaReady.delete(env.__db || env.DATABASE_URL); // always re-check on health
+      schemaReady.delete(env.DB); // always re-check on health
       await ensureSchema(env, d);
       const [r] = await d.q(`SELECT
-        (SELECT coalesce(max((value #>> '{}')::int), 0) FROM settings WHERE key = 'schema_version') AS db_version,
-        (SELECT count(*)::int FROM questions WHERE active) AS questions,
-        (SELECT count(*)::int FROM players) AS players,
-        (SELECT count(*)::int FROM areas) AS areas`);
+        (SELECT coalesce(max(CAST(value AS INTEGER)), 0) FROM settings WHERE key = 'schema_version') AS db_version,
+        (SELECT count(*) FROM questions WHERE active) AS questions,
+        (SELECT count(*) FROM players) AS players,
+        (SELECT count(*) FROM areas) AS areas`);
       return json({
         ok: !lastUpgradeError, version: VERSION, database: 'connected', schemaVersion: SCHEMA_VERSION, databaseVersion: r.db_version,
         questionUpgrade: lastUpgradeError || 'done',

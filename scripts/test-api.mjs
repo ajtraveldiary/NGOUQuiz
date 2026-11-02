@@ -1,31 +1,37 @@
-// End-to-end API test against an in-memory Postgres (PGlite) — no Neon needed.
-// Usage: npm i -D esbuild @electric-sql/pglite && node scripts/test-api.mjs
+// End-to-end API test against an in-memory D1 stand-in (Node's built-in SQLite) — no Cloudflare account needed.
+// Usage: npm install && npm test
 import { build } from 'esbuild';
-import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
+import { d1 } from './d1-sqlite.mjs';
 
-const root = new URL('..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url));
+const workerFile = pathToFileURL(join(root, '.test-build/worker.mjs')).href;
 await build({
-  entryPoints: [root + 'src/index.js'], bundle: true, format: 'esm', platform: 'neutral',
-  outfile: root + '.test-build/worker.mjs', loader: { '.html': 'text', '.sql': 'text' }, logLevel: 'error',
+  entryPoints: [join(root, 'src/index.js')], bundle: true, format: 'esm', platform: 'neutral',
+  outfile: join(root, '.test-build/worker.mjs'), loader: { '.html': 'text', '.sql': 'text' }, logLevel: 'error',
   mainFields: ['module', 'main'], external: ['node:*'],
 });
-const worker = (await import(root + '.test-build/worker.mjs?' + Date.now())).default;
+const worker = (await import(workerFile + '?' + Date.now())).default;
 
-// database adapter like the Worker's: q() for one statement, tx() for a transaction
-const mkDb = (db) => ({
-  q: async (t, p = []) => (await db.query(t, p)).rows,
-  tx: (list) => db.transaction(async (t) => { const out = []; for (const [q, p = []] of list) out.push((await t.query(q, p)).rows); return out; }),
-});
-const POOL = JSON.parse(readFileSync(root + 'db/seed-questions.json', 'utf8'));
-const pg = new PGlite();
-await pg.exec(readFileSync(root + 'db/schema.sql', 'utf8'));
-await pg.exec(readFileSync(root + 'db/seed.sql', 'utf8'));
+const POOL = JSON.parse(readFileSync(join(root, 'db/seed-questions.json'), 'utf8'));
+const DB = d1(); // tables and starter questions are created by the Worker on the first request
 const env = {
   APP_SECRET: 'test-secret-0123456789abcdef', ADMIN_PASSWORD: 'pass123', ADMIN_PATH: 'secret-room',
-  __db: mkDb(pg),
+  DB,
 };
+// peeking at the database: a game's questions and option orders, a question's right answer, a question served earlier
+const gameRow = (id) => {
+  const g = DB.rows('SELECT question_ids, option_orders FROM games WHERE id = ?', id)[0];
+  return { question_ids: JSON.parse(g.question_ids), option_orders: JSON.parse(g.option_orders) };
+};
+const rightIndex = (qid) => DB.rows('SELECT correct_index FROM questions WHERE id = ?', qid)[0].correct_index;
+const servedAgo = (gameId, seconds) =>
+  DB.rows(`UPDATE games SET served_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?) WHERE id = ?`, `-${seconds} seconds`, gameId);
+const count = (db, sql, ...args) => db.rows(`SELECT count(*) AS n FROM ${sql}`, ...args)[0].n;
 async function call(method, path, data, headers = {}) {
   const init = { method, headers: { 'content-type': 'application/json', ...headers } };
   if (data !== undefined) init.body = JSON.stringify(data);
@@ -44,7 +50,7 @@ assert.equal(cfg.campaign.date, '2026-11-21');
 assert.equal(cfg.subtitle, 'Kerala NGO Union');
 assert.equal(cfg.version, JSON.parse(readFileSync(root + 'package.json', 'utf8')).version);
 assert.equal(ok(await call('GET', '/api/version'), 'version').version, cfg.version);
-assert.equal((await worker.fetch(new Request('https://quiz.test/api/version'), { ...env, __db: undefined, DATABASE_URL: '' }, {})).status, 200, 'version check needs no database');
+assert.equal((await worker.fetch(new Request('https://quiz.test/api/version'), { ...env, DB: undefined }, {})).status, 200, 'version check needs no database');
 {
   const html = readFileSync(root + 'public/index.html', 'utf8');
   for (const re of [/name="app-version" content="([^"]+)"/, /\/app\.js\?v=([^"]+)"/, /\/style\.css\?v=([^"]+)"/]) {
@@ -101,16 +107,15 @@ async function playGame(player, strategy) {
 
 // Player 1: answers everything correctly (look up the right answer by peeking at the DB)
 async function cheatCorrect(i, q, key, gameId) {
-  const g = (await pg.query('SELECT question_ids, option_orders FROM games WHERE id = $1', [gameId])).rows[0];
-  const qq = (await pg.query('SELECT correct_index FROM questions WHERE id = $1', [g.question_ids[i]])).rows[0];
-  return g.option_orders[i].indexOf(qq.correct_index);
+  const g = gameRow(gameId);
+  return g.option_orders[i].indexOf(rightIndex(g.question_ids[i]));
 }
 const p1 = await playGame({ name: 'Anu Mohan', office: 'DHS Thiruvananthapuram', district: 'Thiruvananthapuram North', phone: '+91 98765 43210' }, cheatCorrect);
 assert.deepEqual(p1.levels.slice(0, 10), ['easy', 'easy', 'easy', 'easy', 'medium', 'medium', 'medium', 'medium', 'hard', 'hard']);
 assert.equal(p1.levels.length, 11, '10 regular questions + 1 bonus');
-const p1Game = (await pg.query('SELECT question_ids FROM games WHERE id = $1', [p1.st.gameId])).rows[0];
-const p1Flags = (await pg.query('SELECT id, campaign FROM questions WHERE id = ANY($1::int[])', [p1Game.question_ids])).rows;
-const isCampaign = Object.fromEntries(p1Flags.map((r) => [r.id, r.campaign]));
+const p1Game = gameRow(p1.st.gameId);
+const p1Flags = DB.rows('SELECT id, campaign FROM questions WHERE id IN (SELECT value FROM json_each(?))', JSON.stringify(p1Game.question_ids));
+const isCampaign = Object.fromEntries(p1Flags.map((r) => [r.id, !!r.campaign]));
 assert.deepEqual(p1Game.question_ids.map((id) => isCampaign[id]), [...Array(10).fill(false), true], 'only the last question is about the programme');
 assert.equal(p1.res.answers[10].bonus, true);
 assert.equal(p1.res.correct, 11);
@@ -125,7 +130,7 @@ console.log('✓ perfect game score', p1.res.score);
 
 // Player 2: wrong on everything, plus a timeout on Q1
 const p2 = await playGame({ name: 'Biju K', office: 'Taluk Hospital', district: 'Kollam', area: 'Kottarakkara', phone: '9123456789' }, async (i, q, key, gameId) => {
-  if (i === 0) { await pg.query(`UPDATE games SET served_at = now() - interval '30 seconds' WHERE id = $1`, [gameId]); return 1; }
+  if (i === 0) { servedAgo(gameId, 30); return 1; }
   const right = await cheatCorrect(i, q, key, gameId);
   return (right + 1) % q.options.length;
 });
@@ -136,7 +141,7 @@ console.log('✓ zero game, timeout + wrong answers handled');
 
 // Player 3: half right, slow-ish answers (10s each)
 const p3 = await playGame({ name: 'Cicily', office: 'PHC Kottayam', district: 'Kottayam', phone: '9000000001' }, async (i, q, key, gameId) => {
-  await pg.query(`UPDATE games SET served_at = now() - interval '10.4 seconds' WHERE id = $1`, [gameId]);
+  servedAgo(gameId, 10.4);
   const right = await cheatCorrect(i, q, key, gameId);
   return i % 2 === 0 ? right : (right + 1) % q.options.length;
 });
@@ -150,9 +155,8 @@ console.log('✓ half-right game score', p3.res.score, 'rank', p3.res.overall.me
   const reg = ok(await call('POST', '/api/register', { name: 'Deepa', office: 'DHS', district: 'Kottayam', phone: '9000000002' }), 'reg4');
   const st = ok(await call('POST', '/api/game/start', { playerKey: reg.playerKey }), 'start4');
   const peek = async (i) => {
-    const g = (await pg.query('SELECT question_ids, option_orders FROM games WHERE id = $1', [st.gameId])).rows[0];
-    const qq = (await pg.query('SELECT correct_index FROM questions WHERE id = $1', [g.question_ids[i]])).rows[0];
-    return g.option_orders[i].indexOf(qq.correct_index);
+    const g = gameRow(st.gameId);
+    return g.option_orders[i].indexOf(rightIndex(g.question_ids[i]));
   };
   const ans = async (i, choice) => {
     ok(await call('POST', '/api/game/next', { playerKey: reg.playerKey, gameId: st.gameId }), 'next4');
@@ -166,7 +170,7 @@ console.log('✓ half-right game score', p3.res.score, 'rank', p3.res.overall.me
   ok(await call('POST', '/api/game/next', { playerKey: reg.playerKey, gameId: st.gameId }), 'next4');
   const early = await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st.gameId, index: 2, choice: 'skip' });
   assert.equal(early.status, 400, 'no skip in the first 5 seconds');
-  await pg.query(`UPDATE games SET served_at = now() - interval '6 seconds' WHERE id = $1`, [st.gameId]);
+  servedAgo(st.gameId, 6);
   const a2 = ok(await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st.gameId, index: 2, choice: 'skip' }), 'skip'); // skip: 0, no penalty
   assert.equal(a2.skipped, true); assert.equal(a2.points, 0); assert.equal(a2.score, a1.score); assert.equal(a2.timedOut, false);
   let last;
@@ -177,21 +181,20 @@ console.log('✓ half-right game score', p3.res.score, 'rank', p3.res.overall.me
   assert.equal(res.wrong, 9); assert.equal(res.skipped, 1); assert.equal(res.correct, 1);
   assert.equal(res.marksLost, a0.points);
   assert.deepEqual(res.answers.slice(0, 3).map((a) => a.state), ['right', 'wrong', 'skipped']);
-  assert.equal((await pg.query('SELECT count(*)::int AS n FROM answers WHERE game_id = $1 AND skipped', [st.gameId])).rows[0].n, 1);
+  assert.equal(count(DB, 'answers WHERE game_id = ? AND skipped', st.gameId), 1);
   assert.equal((await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st.gameId, index: 10, choice: 'nope' })).status, 409);
   console.log('✓ negative marks, skip without penalty, score never below zero, wrong bonus costs nothing');
   // a correct bonus answer earns points: check with a fresh game answered right only on the bonus
   const st2 = ok(await call('POST', '/api/game/start', { playerKey: reg.playerKey }), 'start4b');
   const peek2 = async (i) => {
-    const g = (await pg.query('SELECT question_ids, option_orders FROM games WHERE id = $1', [st2.gameId])).rows[0];
-    const qq = (await pg.query('SELECT correct_index FROM questions WHERE id = $1', [g.question_ids[i]])).rows[0];
-    return g.option_orders[i].indexOf(qq.correct_index);
+    const g = gameRow(st2.gameId);
+    return g.option_orders[i].indexOf(rightIndex(g.question_ids[i]));
   };
   let b;
   for (let i = 0; i < st2.total; i++) {
     const nx = ok(await call('POST', '/api/game/next', { playerKey: reg.playerKey, gameId: st2.gameId }), 'next4b');
     assert.equal(!!nx.bonus, i === st2.total - 1);
-    await pg.query(`UPDATE games SET served_at = now() - interval '6 seconds' WHERE id = $1`, [st2.gameId]);
+    servedAgo(st2.gameId, 6);
     b = ok(await call('POST', '/api/game/answer', { playerKey: reg.playerKey, gameId: st2.gameId, index: i, choice: i === st2.total - 1 ? await peek2(i) : 'skip' }), 'ans4b');
   }
   assert.equal(b.bonus, true); assert.equal(b.correct, true); assert.ok(b.points > 0); assert.equal(b.done, true);
@@ -228,6 +231,14 @@ assert.equal(stats.totals.finished, 6);
 const qs = ok(await call('GET', '/api/admin/questions', undefined, A), 'questions');
 assert.equal(qs.questions.length, POOL.length);
 assert.ok(qs.questions.every((q) => /[\u0D00-\u0D7F]/.test(q.question)), 'pool is Malayalam');
+{ // skip counts are numbers, in the question list and in the games export
+  const skips = count(DB, 'answers WHERE skipped');
+  assert.ok(skips > 1);
+  assert.ok(qs.questions.every((q) => typeof q.skipped === 'number' && typeof q.active === 'boolean'));
+  assert.equal(qs.questions.reduce((t, q) => t + q.skipped, 0), skips);
+  const csv = (await call('GET', '/api/admin/export?type=games', undefined, A)).body.split('\r\n').slice(1).map((l) => l.split(','));
+  assert.equal(csv.reduce((t, r) => t + Number(r[10]), 0), skips);
+}
 const created = ok(await call('POST', '/api/admin/questions', { question: 'ചോദ്യം?', options: ['ഒന്ന്', 'രണ്ട്', 'മൂന്ന്'], correct_index: 1, difficulty: 'easy', category: 'Test' }, A), 'create q');
 ok(await call('PUT', '/api/admin/questions/' + created.id, { question: 'ചോദ്യം 2?', options: ['a', 'b'], correct_index: 0, difficulty: 'hard' }, A), 'edit q');
 assert.equal((await call('POST', '/api/admin/questions', { question: 'x', options: ['a'], correct_index: 0, difficulty: 'easy' }, A)).status, 400);
@@ -306,7 +317,7 @@ assert.ok(!ok(await call('GET', '/api/config'), 'cfg3').areas.Kollam.includes('K
 console.log('✓ areas: rename updates players, filter, stats, export, delete');
 // ---- question picking: never two questions with the same topic in one game ----
 {
-  const { pickQuestions } = await import(root + '.test-build/worker.mjs?pick');
+  const { pickQuestions } = await import(workerFile + '?pick');
   const pool = POOL.map((q, i) => ({ id: i + 1, difficulty: q.difficulty, category: q.category, topic: q.topic, campaign: !!q.campaign }));
   const MIX = [{ name: 'Political', percent: 60 }, { name: 'Constitution', percent: 10 }, { name: 'KSR & Govt rules', percent: 20 }, { name: 'General political', percent: 10 }];
   for (let g = 0; g < 300; g++) {
@@ -326,7 +337,7 @@ console.log('✓ areas: rename updates players, filter, stats, export, delete');
   const tiny = [{ id: 1, difficulty: 'easy', topic: 'a' }, { id: 2, difficulty: 'easy', topic: 'a' }, { id: 3, difficulty: 'hard', topic: 'b' }];
   assert.equal(pickQuestions(tiny, { easy: 2, medium: 0, hard: 1 }).length, 3);
   // quota arithmetic
-  const { categoryQuotas } = await import(root + '.test-build/worker.mjs?quota');
+  const { categoryQuotas } = await import(workerFile + '?quota');
   assert.deepEqual(categoryQuotas(MIX, 10).map((x) => x.n), [6, 1, 2, 1]);
   assert.equal(categoryQuotas([{ name: 'A', percent: 50 }, { name: 'B', percent: 50 }], 5).reduce((t, x) => t + x.n, 0), 5);
   assert.equal(categoryQuotas([{ name: 'A', percent: 30 }], 10)[0].n, 3);
@@ -339,8 +350,8 @@ async function callEnv(e, method, path) {
   return { status: res.status, body: await res.json() };
 }
 // 1. brand-new empty database: tables and starter questions are created on first visit
-const fresh = new PGlite();
-const envFresh = { ...env, __db: mkDb(fresh) };
+const fresh = d1();
+const envFresh = { ...env, DB: fresh };
 const c1 = await callEnv(envFresh, 'GET', '/api/config');
 assert.equal(c1.status, 200, JSON.stringify(c1.body));
 assert.equal(c1.body.totalQuestions, 10);
@@ -348,84 +359,51 @@ const h1 = await callEnv(envFresh, 'GET', '/api/health');
 assert.equal(h1.body.ok, true); assert.equal(h1.body.activeQuestions, POOL.length);
 assert.equal(h1.body.questionUpgrade, 'done'); assert.equal(h1.body.databaseVersion, h1.body.schemaVersion);
 await callEnv(envFresh, 'GET', '/api/health'); // re-running setup must not duplicate questions
-assert.equal((await fresh.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
-// 2. database made with the first version (no areas table, old district name) is upgraded
-const { execSync } = await import('node:child_process');
-const oldSchema = execSync('git show f765cbf:db/schema.sql', { cwd: root }).toString();
-const old = new PGlite();
-await old.exec(oldSchema);
-await old.query(`INSERT INTO players (name, office, district, phone) VALUES ('Old', 'X', 'Thiruvananthapuram', '9999999999')`);
-await old.query(`INSERT INTO settings (key, value) VALUES ('game', '{"subtitle": "Kerala NGO Union, State Committee", "title": "Arivu Quiz"}')`);
-await old.query(`INSERT INTO questions (question, options, correct_index, difficulty) VALUES ('Old English question?', '["a","b"]', 0, 'easy')`);
-const envOld = { ...env, __db: mkDb(old) };
-const c2 = await callEnv(envOld, 'GET', '/api/config');
-assert.equal(c2.status, 200, JSON.stringify(c2.body));
-assert.equal((await old.query('SELECT district FROM players')).rows[0].district, 'Thiruvananthapuram North');
-assert.equal(c2.body.subtitle, 'Kerala NGO Union');
-// existing questions are cleared once and replaced by the Malayalam pool
-assert.equal((await old.query(`SELECT count(*)::int AS n FROM questions WHERE question = 'Old English question?'`)).rows[0].n, 0);
-assert.equal((await old.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
-// after the upgrade, questions added by the admin are never removed again
-await old.query(`INSERT INTO questions (question, options, correct_index, difficulty) VALUES ('പുതിയ ചോദ്യം?', '["a","b"]', 0, 'easy')`);
-await callEnv({ ...envOld, __db: mkDb(old) }, 'GET', '/api/health');
-assert.equal((await old.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length + 1);
-// two Worker instances upgrading at the same moment do not duplicate the pool
-const race = new PGlite(); await race.exec(oldSchema);
-const rEnv1 = { ...env, __db: mkDb(race) }, rEnv2 = { ...env, __db: mkDb(race) };
-await Promise.all([callEnv(rEnv1, 'GET', '/api/config'), callEnv(rEnv2, 'GET', '/api/config')]);
-assert.equal((await race.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
-// a v5 database (Malayalam pool with old categories) moves the starter questions to Political, leaves admin questions alone
-await race.query(`UPDATE questions SET category = 'NPS'`);
-await race.query(`INSERT INTO questions (question, options, correct_index, difficulty, category) VALUES ('അഡ്മിൻ ചോദ്യം?', '["a","b"]', 0, 'easy', 'GK')`);
-await race.query(`UPDATE settings SET value = '5'::jsonb WHERE key = 'schema_version'`);
-await callEnv({ ...env, __db: mkDb(race) }, 'GET', '/api/health');
-// only the original pension questions move to Political; Constitution / KSR / General political keep their own category
-assert.equal((await race.query(`SELECT count(*)::int AS n FROM questions WHERE category = 'Political'`)).rows[0].n, POOL.filter((q) => !q.batch).length);
-assert.equal((await race.query(`SELECT category FROM questions WHERE question = 'അഡ്മിൻ ചോദ്യം?'`)).rows[0].category, 'GK');
-// a v6 database (first 61 questions only) gets the Secretariat Valayal questions once, no duplicates
+assert.equal(count(fresh, 'questions'), POOL.length);
+assert.equal(count(fresh, 'questions WHERE campaign'), POOL.filter((q) => q.campaign).length);
+// 2. a database copied from 2.x (version 11: bonus questions hidden, Thiruvananthapuram one district) is put back to 1.9.1
 {
-  const v6 = new PGlite(); await v6.exec(readFileSync(root + 'db/schema.sql', 'utf8'));
-  const first = POOL.filter((q) => !q.batch);
-  for (const q of first) {
-    await v6.query(`INSERT INTO questions (question, options, correct_index, difficulty, category, topic) VALUES ($1, $2::jsonb, $3, $4, 'Political', $5)`,
-      [q.question, JSON.stringify(q.options), q.correct, q.difficulty, q.topic]);
-  }
-  await v6.query(`INSERT INTO settings (key, value) VALUES ('schema_version', '6'::jsonb)`);
-  await callEnv({ ...env, __db: mkDb(v6) }, 'GET', '/api/health');
-  await callEnv({ ...env, __db: mkDb(v6) }, 'GET', '/api/health');
-  assert.equal((await v6.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
-  assert.equal((await v6.query('SELECT count(*)::int AS n FROM questions WHERE campaign')).rows[0].n, POOL.filter((q) => q.campaign).length);
-}
-// a v8 database with the older brochure wording gets the reworded questions, once, without duplicates
-{
-  const v8 = new PGlite(); await v8.exec(readFileSync(root + 'db/schema.sql', 'utf8'));
+  const v11 = d1();
+  await v11.exec(readFileSync(root + 'db/schema.sql', 'utf8'));
   for (const q of POOL) {
-    await v8.query(`INSERT INTO questions (question, options, correct_index, difficulty, category, topic, campaign, explanation) VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8)`,
-      [q.previous ? q.previous[0] : q.question, JSON.stringify(q.options), q.correct, q.difficulty, q.category, q.topic, !!q.campaign, 'old']);
+    v11.rows(`INSERT INTO questions (question, options, correct_index, difficulty, category, topic, campaign, active) VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
+      q.question, JSON.stringify(q.options), q.correct, q.difficulty, q.category ?? null, q.topic ?? null, q.campaign ? 0 : 1);
   }
-  await v8.query(`INSERT INTO settings (key, value) VALUES ('schema_version', '8'::jsonb)`);
-  const h = await callEnv({ ...env, __db: mkDb(v8) }, 'GET', '/api/health');
-  assert.equal(h.body.questionUpgrade, 'done');
-  assert.equal((await v8.query('SELECT count(*)::int AS n FROM questions')).rows[0].n, POOL.length);
-  assert.equal((await v8.query(`SELECT count(*)::int AS n FROM questions WHERE question LIKE '%ലഘുലേഖ%' OR explanation LIKE '%ലഘുലേഖ%'`)).rows[0].n, 0);
-  const renamedCount = POOL.filter((q) => q.previous).length;
-  assert.equal((await v8.query(`SELECT count(*)::int AS n FROM questions WHERE explanation <> 'old'`)).rows[0].n, renamedCount);
+  v11.rows(`INSERT INTO questions (question, options, correct_index, difficulty, active) VALUES ('അഡ്മിൻ മറച്ച ചോദ്യം?', '["a","b"]', 0, 'easy', 0)`);
+  v11.rows(`INSERT INTO players (name, district) VALUES ('2.x player', 'Thiruvananthapuram')`);
+  v11.rows(`INSERT INTO settings (key, value) VALUES ('schema_version', '11')`);
+  const h = await callEnv({ ...env, DB: v11 }, 'GET', '/api/health');
+  assert.equal(h.body.ok, true, JSON.stringify(h.body)); assert.equal(h.body.databaseVersion, 12);
+  assert.equal(count(v11, 'questions WHERE active'), POOL.length, 'hidden bonus questions are shown again');
+  assert.equal(count(v11, 'questions WHERE campaign'), POOL.filter((q) => q.campaign).length, 'and are bonus questions again');
+  assert.equal(count(v11, `questions WHERE question = 'അഡ്മിൻ മറച്ച ചോദ്യം?' AND NOT active`), 1, 'a question the admin hid stays hidden');
+  assert.equal(v11.rows('SELECT district FROM players')[0].district, 'Thiruvananthapuram North');
+  assert.equal((await callEnv({ ...env, DB: v11 }, 'GET', '/api/config')).body.bonusQuestion, true);
 }
-// if the question upgrade fails, the quiz keeps running and /api/health reports it
+// 3. two Worker instances setting up the same new database at the same moment do not duplicate the pool
 {
-  const broken = new PGlite(); await broken.exec(oldSchema);
-  const db = mkDb(broken);
-  const envBroken = { ...env, __db: { q: db.q, tx: async () => { throw new Error('simulated failure'); } } };
-  const c = await callEnv(envBroken, 'GET', '/api/config');
+  const file = join(tmpdir(), `quiz-race-${process.pid}.sqlite`);
+  const a = d1(file), b = d1(file);
+  await Promise.all([callEnv({ ...env, DB: a }, 'GET', '/api/config'), callEnv({ ...env, DB: b }, 'GET', '/api/config')]);
+  assert.equal(count(a, 'questions'), POOL.length);
+}
+// 4. if the question step fails, the quiz keeps running and /api/health reports it
+{
+  const real = d1();
+  const broken = { ...real, batch: async (list) => {
+    if (list.some((s) => /schema_version/.test(s.sql))) throw new Error('simulated failure');
+    return real.batch(list);
+  } };
+  const c = await callEnv({ ...env, DB: broken }, 'GET', '/api/config');
   assert.equal(c.status, 200, 'config still works');
-  const h = await callEnv({ ...envBroken }, 'GET', '/api/health');
+  const h = await callEnv({ ...env, DB: broken }, 'GET', '/api/health');
   assert.equal(h.body.ok, false); assert.match(h.body.questionUpgrade, /simulated failure/);
 }
-// 3. clear messages for configuration mistakes
-const noUrl = { APP_SECRET: env.APP_SECRET, ADMIN_PASSWORD: 'x' };
-assert.match((await callEnv(noUrl, 'GET', '/api/config')).body.error, /DATABASE_URL is not set/);
-assert.match((await callEnv({ ...noUrl, DATABASE_URL: 'mysql://x' }, 'GET', '/api/health')).body.error, /should start with postgresql/);
-console.log('✓ auto setup: empty database, old database upgrade, clear config errors');
+// 5. a clear message when the database is not connected
+const noDb = { APP_SECRET: env.APP_SECRET, ADMIN_PASSWORD: 'x' };
+assert.match((await callEnv(noDb, 'GET', '/api/config')).body.error, /D1 database is not connected/);
+assert.match((await callEnv(noDb, 'GET', '/api/health')).body.error, /D1 database is not connected/);
+console.log('✓ auto setup: empty database, upgrade of a 2.x copy, two instances at once, clear config errors');
 console.log('✓ admin: stats, question CRUD, import, players, void/restore, exports, settings');
 // Rate limits (in-Worker counter here; Cloudflare's binding when deployed) and requests from other sites
 {
