@@ -21,12 +21,9 @@ binding = "DB"
 database_name = "ngouquiz"
 database_id = "d0424035-877c-47a3-afc1-3fdb6f5641b4"
 
-[vars]
-# The hidden admin page lives at https://<your-domain>/<ADMIN_PATH>
-# Change this to something only your team knows.
-ADMIN_PATH = "desk-ydxesk4m"
-
 # Secrets — set with:  npx wrangler secret put <NAME>
+#   ADMIN_PATH      the admin page's address, https://<your-domain>/<ADMIN_PATH> — something only your team knows
+#                   (a secret so it is not in this public file; without it there is no admin page)
 #   APP_SECRET      any random string, 32+ characters (signs player and admin tokens)
 #   ADMIN_PASSWORD  password for the admin page
 
@@ -62,3 +59,13 @@ simple = { limit = 90, period = 60 }
 name = "RL_ADMIN"
 namespace_id = "4106"
 simple = { limit = 300, period = 60 }
+
+[[ratelimits]]
+name = "RL_LOGIN"
+namespace_id = "4107"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "RL_HEALTH"
+namespace_id = "4108"
+simple = { limit = 20, period = 60 }

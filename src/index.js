@@ -98,7 +98,9 @@ function shuffle(arr) {
 }
 const clean = (s, max) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const csvCell = (v) => {
-  const s = v == null ? '' : String(v);
+  let s = v == null ? '' : String(v);
+  // text a player typed that starts like a formula (=, +, -, @) would run as one in Excel: keep it as text
+  if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
@@ -989,6 +991,8 @@ const LIMITS = {
   start: { binding: 'RL_START', limit: 10 },         // new games (per player)
   play: { binding: 'RL_PLAY', limit: 90 },           // next question / answer / result (per player)
   admin: { binding: 'RL_ADMIN', limit: 300 },        // admin page requests (per address)
+  login: { binding: 'RL_LOGIN', limit: 10 },         // admin password attempts (per address)
+  health: { binding: 'RL_HEALTH', limit: 20 },       // /api/health, which counts every table (per address)
 };
 const hits = new Map();
 async function rateLimit(env, kind, key) {
@@ -1027,23 +1031,44 @@ async function memo(env, key, ms, fn) {
 }
 const memoClear = (env) => memoStore.delete(env.DB);
 
+// ---------- admin page security policy ----------
+// Only the page's own script (allowed by its hash), its own API and the Google fonts; no framing
+let adminCspValue = null;
+async function adminCsp() {
+  if (!adminCspValue) {
+    // browsers hash the script as parsed, with line endings turned into \n
+    const script = (ADMIN_HTML.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '').replace(/\r\n?/g, '\n');
+    const hash = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(script)))));
+    adminCspValue = [
+      "default-src 'none'", `script-src 'sha256-${hash}'`, "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src https://fonts.gstatic.com", "img-src 'self' data:", "connect-src 'self'",
+      "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'",
+    ].join('; ');
+  }
+  return adminCspValue;
+}
+
 // ---------- router ----------
 async function route(req, env) {
   const url = new URL(req.url);
   const p = url.pathname.replace(/\/+$/, '') || '/';
   const m = req.method;
-  const adminPath = '/' + String(env.ADMIN_PATH || 'union-control-room').replace(/^\/+|\/+$/g, '');
+  // The admin page's address is the ADMIN_PATH secret; without it there is no admin page
+  const adminPath = env.ADMIN_PATH ? '/' + String(env.ADMIN_PATH).trim().replace(/^\/+|\/+$/g, '') : null;
 
-  if (p === adminPath && m === 'GET') {
+  if (adminPath && p === adminPath && m === 'GET') {
     return new Response(ADMIN_HTML.replaceAll('{{VERSION}}', VERSION), {
       headers: {
         'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store',
         'x-robots-tag': 'noindex, nofollow', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer',
+        'x-content-type-options': 'nosniff', 'content-security-policy': await adminCsp(),
       },
     });
   }
   if (!p.startsWith('/api/')) return null;
+  const ip = req.headers.get('cf-connecting-ip') || 'local';
   if (p === '/api/health' && m === 'GET') {
+    await rateLimit(env, 'health', ip);
     try {
       const d = db(env);
       schemaReady.delete(env.DB); // always re-check on health
@@ -1067,7 +1092,7 @@ async function route(req, env) {
     }
   }
   // Limits are checked before the database is touched
-  const ip = req.headers.get('cf-connecting-ip') || 'local';
+  if (p === '/api/admin/login') await rateLimit(env, 'login', ip);
   if (m === 'GET' && (p === '/api/config' || p === '/api/leaderboard' || p === '/api/version')) await rateLimit(env, 'read', ip);
   else if (p === '/api/register') await rateLimit(env, 'register', ip);
   else if (p.startsWith('/api/game/')) await rateLimit(env, 'gameIp', ip);

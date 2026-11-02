@@ -427,4 +427,27 @@ console.log('✓ admin: stats, question CRUD, import, players, void/restore, exp
   assert.equal(broken.status, 200, 'a failing Cloudflare binding does not break the game');
   console.log('✓ rate limits per address and per player, Retry-After, other sites blocked, Cloudflare binding used');
 }
+// Security: password guessing and /api/health are limited, formulas in exports stay text, admin page needs ADMIN_PATH
+{
+  const at = (ip) => ({ 'cf-connecting-ip': ip });
+  let r;
+  for (let i = 0; i < 11; i++) r = await call('POST', '/api/admin/login', { password: 'guess' + i }, at('203.0.113.50'));
+  assert.equal(r.status, 429, 'ten password tries a minute per address');
+  for (let i = 0; i < 21; i++) r = await call('GET', '/api/health', undefined, at('203.0.113.51'));
+  assert.equal(r.status, 429, 'health check is limited');
+  ok(await call('POST', '/api/register', { name: 'Formula', office: '=HYPERLINK("http://x")', district: 'Kottayam', phone: '9100000097' }, at('203.0.113.52')), 'formula reg');
+  const { token } = ok(await call('POST', '/api/admin/login', { password: 'pass123' }, at('203.0.113.53')), 'login');
+  const csv = (await call('GET', '/api/admin/export?type=players', undefined, { authorization: 'Bearer ' + token, ...at('203.0.113.53') })).body;
+  assert.ok(csv.includes(`"'=HYPERLINK(""http://x"")"`), 'a formula is exported as text');
+  assert.ok(!/,=HYPERLINK|,"=HYPERLINK/.test(csv));
+  const page = await worker.fetch(new Request('https://quiz.test/secret-room'), env, {});
+  const csp = page.headers.get('content-security-policy');
+  // as a browser hashes it: the parsed script, line endings turned into \n
+  const script = (await page.text()).match(/<script>([\s\S]*?)<\/script>/)[1].replace(/\r\n?/g, '\n');
+  const { createHash } = await import('node:crypto');
+  assert.ok(csp.includes(`'sha256-${createHash('sha256').update(script).digest('base64')}'`), 'admin page allows only its own script');
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.equal((await worker.fetch(new Request('https://quiz.test/union-control-room'), { ...env, ADMIN_PATH: undefined }, {})).status, 404, 'no ADMIN_PATH, no admin page');
+  console.log('✓ security: login and health limits, formulas in exports kept as text, admin page CSP, admin page only with ADMIN_PATH');
+}
 console.log('\nAll API tests passed.');

@@ -38,11 +38,11 @@ scripts/           local server, API tests, demo build, one-time Neon export
    npx wrangler d1 create ngouquiz --location apac   # then put the printed database_id in wrangler.toml ([[d1_databases]], binding "DB")
    npx wrangler secret put APP_SECRET       # any random 32+ character string
    npx wrangler secret put ADMIN_PASSWORD   # admin page password
+   npx wrangler secret put ADMIN_PATH       # the admin page's address, e.g. ngou-desk-4831 (no admin page without it)
    ```
 2. The Worker creates the tables and loads the starter questions itself on its first request.
-3. In `wrangler.toml`, change `ADMIN_PATH` to a path only your team knows (e.g. `ngou-desk-4831`).
-4. `npm run deploy`. When it finishes, it prints the game's web address (also shown in the Cloudflare dashboard under *Workers & Pages → ngouquiz*). The admin page is that address followed by `/` and your `ADMIN_PATH`.
-5. Optional: Workers → your worker → *Settings → Domains & Routes* to add `quiz.keralangounion.in`.
+3. `npm run deploy`. When it finishes, it prints the game's web address (also shown in the Cloudflare dashboard under *Workers & Pages → ngouquiz*). The admin page is that address followed by `/` and your `ADMIN_PATH`.
+4. Optional: Workers → your worker → *Settings → Domains & Routes* to add `quiz.keralangounion.in`.
 
 ## Try it locally
 
@@ -52,7 +52,7 @@ npm run local        # http://localhost:8787 — admin at /union-control-room, p
 npm test             # end-to-end API tests on an in-memory D1 stand-in (Node's built-in SQLite, Node 22.5+)
 ```
 
-`npm run dev` runs the real Worker with a local D1 database (kept in `.wrangler/`); it needs `APP_SECRET` and `ADMIN_PASSWORD` in a `.dev.vars` file.
+`npm run dev` runs the real Worker with a local D1 database (kept in `.wrangler/`); it needs `APP_SECRET`, `ADMIN_PASSWORD` and `ADMIN_PATH` in a `.dev.vars` file.
 
 ## Admin page
 
@@ -111,7 +111,8 @@ Every request is checked against a per-minute limit before the database is touch
 | Game requests | 600 per internet address |
 | New games | 10 per player |
 | Questions, answers, results | 90 per player |
-| Admin page | 300 per internet address (plus 8 wrong passwords per 15 minutes) |
+| Admin page | 300 per internet address; password tries 10 per address (plus 8 wrong passwords per 15 minutes) |
+| Health check (`/api/health`) | 20 per internet address |
 
 Over the limit, the game shows "Too many requests. Wait a minute and try again." Per-address limits are generous on purpose: many phones on one mobile network, or one office, can share an address. The limits live in `wrangler.toml` (`[[ratelimits]]`, Cloudflare Workers Rate Limiting) and in `LIMITS` in `src/index.js` (used if the Cloudflare limits are missing); keep the two in step. Changes sent from other websites are refused.
 

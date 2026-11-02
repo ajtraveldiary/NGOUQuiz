@@ -3,6 +3,16 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 2.7.1
+Security fixes from a site-wide check:
+- Admin password tries are limited to 10 a minute per internet address (new rate limit `RL_LOGIN`), on top of the 8-wrong-tries lockout
+- `/api/health` is limited to 20 a minute per address (`RL_HEALTH`); it counts every table, so it could be used to run up database reads
+- CSV exports keep text that starts with `=`, `+`, `-` or `@` as text (a leading `'`), so a player's name or office can't run as an Excel formula
+- The admin page's address is now the `ADMIN_PATH` secret instead of a line in the public wrangler.toml; without the secret there is no admin page
+- Content-Security-Policy on the game page (public/_headers) and the admin page (only its own script, by hash), and neither page can be shown inside another site
+- The admin login form can never put the password in the address bar, even if the page's script fails to run
+- Development tools updated (wrangler 4.156.1); `npm audit` finds no known vulnerabilities
+
 ## 2.7.0
 - Data moves from Neon Postgres to Cloudflare D1 (database `ngouquiz`, binding `DB` in wrangler.toml), so the whole quiz runs in one Cloudflare account. `DATABASE_URL` is no longer used
 - Every query is rewritten for SQLite; the game, scoring, timing, leaderboard, admin page and exports work as before. Many-row writes (starter questions, question import, areas) go as one statement each, within D1's limits
