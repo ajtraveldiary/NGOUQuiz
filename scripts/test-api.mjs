@@ -450,4 +450,38 @@ console.log('✓ admin: stats, question CRUD, import, players, void/restore, exp
   assert.equal((await worker.fetch(new Request('https://quiz.test/union-control-room'), { ...env, ADMIN_PATH: undefined }, {})).status, 404, 'no ADMIN_PATH, no admin page');
   console.log('✓ security: login and health limits, formulas in exports kept as text, admin page CSP, admin page only with ADMIN_PATH');
 }
+// Link preview: the page's og:image and og:url get the site's full address, the page keeps its security headers,
+// and the picture is a 1200×630 JPEG small enough for WhatsApp (about 300 KB at most)
+{
+  // stand-in for Cloudflare's HTMLRewriter: sets the content of matching <meta property="…"> tags
+  globalThis.HTMLRewriter = class {
+    rules = [];
+    on(sel, h) { this.rules.push([sel.match(/\[property="([^"]+)"\]/)[1], h]); return this; }
+    async transform(res) {
+      let html = await res.text();
+      for (const [prop, h] of this.rules) {
+        let value; h.element({ setAttribute: (_, v) => { value = v; } });
+        html = html.replace(new RegExp(`<meta property="${prop}" content="[^"]*">`), `<meta property="${prop}" content="${value}">`);
+      }
+      return new Response(html, res);
+    }
+  };
+  const html = readFileSync(join(root, 'public/index.html'), 'utf8');
+  const assets = { fetch: async () => new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } }) };
+  const res = await worker.fetch(new Request('https://quiz.example.org/?utm_source=whatsapp'), { ...env, ASSETS: assets }, {});
+  const page = await res.text();
+  assert.match(page, /<meta property="og:image" content="https:\/\/quiz\.example\.org\/og-image\.jpg">/);
+  assert.match(page, /<meta property="og:url" content="https:\/\/quiz\.example\.org\/">/);
+  assert.equal(res.headers.get('x-frame-options'), 'DENY');
+  assert.ok(readFileSync(join(root, 'public/_headers'), 'utf8').includes(res.headers.get('content-security-policy')), 'same policy as public/_headers');
+  delete globalThis.HTMLRewriter;
+  const jpg = readFileSync(join(root, 'public/og-image.jpg'));
+  assert.ok(jpg[0] === 0xff && jpg[1] === 0xd8 && jpg.length < 300_000, 'a small JPEG');
+  for (let i = 2; i < jpg.length;) { // the picture's size, from the JPEG frame header
+    const marker = jpg[i + 1];
+    if (marker >= 0xc0 && marker <= 0xc2) { assert.deepEqual([jpg.readUInt16BE(i + 7), jpg.readUInt16BE(i + 5)], [1200, 630]); break; }
+    i += 2 + jpg.readUInt16BE(i + 2);
+  }
+  console.log('✓ link preview: full picture address on any domain, security headers kept, 1200×630 JPEG of', Math.round(jpg.length / 1024), 'KB');
+}
 console.log('\nAll API tests passed.');

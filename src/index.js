@@ -1048,6 +1048,15 @@ async function adminCsp() {
   return adminCspValue;
 }
 
+// The game page's security headers; keep in step with /* in public/_headers
+const PAGE_HEADERS = {
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+  'x-frame-options': 'DENY',
+  'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+};
+
 // ---------- router ----------
 async function route(req, env) {
   const url = new URL(req.url);
@@ -1064,6 +1073,18 @@ async function route(req, env) {
         'x-content-type-options': 'nosniff', 'content-security-policy': await adminCsp(),
       },
     });
+  }
+  // Link previews (WhatsApp, Facebook and others) only show the picture when its address is complete, so the page's
+  // og:image and og:url get this site's own address (works on workers.dev and on any custom domain)
+  if ((p === '/' || p === '/index.html') && (m === 'GET' || m === 'HEAD') && env.ASSETS && typeof HTMLRewriter !== 'undefined') {
+    const asset = await env.ASSETS.fetch(req);
+    const page = new Response(asset.body, asset);
+    // the page now comes from the Worker, so make sure it keeps the security headers of public/_headers
+    for (const [k, v] of Object.entries(PAGE_HEADERS)) if (!page.headers.has(k)) page.headers.set(k, v);
+    return new HTMLRewriter()
+      .on('meta[property="og:image"]', { element(e) { e.setAttribute('content', url.origin + '/og-image.jpg'); } })
+      .on('meta[property="og:url"]', { element(e) { e.setAttribute('content', url.origin + '/'); } })
+      .transform(page);
   }
   if (!p.startsWith('/api/')) return null;
   const ip = req.headers.get('cf-connecting-ip') || 'local';

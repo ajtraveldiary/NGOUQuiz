@@ -3,6 +3,11 @@
 The version shows in small text on the quiz's opening screen, in the admin page header, and at `/api/health`.
 Bump `version` in `package.json` with every pushed change.
 
+## 2.8.0
+- Link preview picture: sharing the quiz link on WhatsApp, Facebook, Telegram and others shows a 1200×630 card (`public/og-image.jpg`, 72 KB) with the union flag and torch, "Kerala NGO Union presents അറിവ് Quiz", the tagline and the Secretariat Valayal date. The title sits in the middle, so it still shows when WhatsApp crops the picture to a square
+- The Worker fills in the site's full address in the page's preview tags (apps ignore a picture without one), so it works on workers.dev and on any custom domain; `run_worker_first` in wrangler.toml sends just the page through the Worker, which keeps the page's security headers
+- The card is `scripts/og-card.html`; after changing it, run `python scripts/build-og-image.py` (needs Google Chrome and Pillow)
+
 ## 2.7.1
 Security fixes from a site-wide check:
 - Admin password tries are limited to 10 a minute per internet address (new rate limit `RL_LOGIN`), on top of the 8-wrong-tries lockout

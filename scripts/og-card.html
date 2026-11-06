@@ -1,0 +1,63 @@
+<!doctype html>
+<!-- Link-preview picture (1200×630). Rebuild public/og-image.jpg with: python scripts/build-og-image.py -->
+<html lang="ml">
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Anek+Malayalam:wght@500;600;700;800&family=Big+Shoulders+Display:wght@800;900&display=block" rel="stylesheet">
+<style>
+  :root {
+    --night: #2B0710; --red: #D7262E; --red-deep: #A8141E; --brass: #F2B33D;
+    --khadi: #FBF3E8; --ink: #2B0710; --mist: #F3D3CB; --mist-2: #C99A93;
+    --display: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
+    --body: 'Anek Malayalam', 'Noto Sans Malayalam', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    position: relative; color: #fff; font-family: var(--body);
+    background:
+      radial-gradient(70% 70% at 55% -10%, rgba(242, 179, 61, .20), transparent 65%),
+      repeating-linear-gradient(115deg, transparent 0 30px, rgba(255, 255, 255, .03) 30px 60px),
+      var(--night);
+  }
+  /* flag on a brass pole, left */
+  .pole { position: absolute; left: 70px; top: 70px; width: 10px; height: 520px; border-radius: 5px; background: var(--brass); }
+  .pole::before { content: ''; position: absolute; left: -7px; top: -14px; width: 24px; height: 24px; border-radius: 50%; background: var(--brass); }
+  .flag { position: absolute; left: 80px; top: 78px; width: 300px; height: 190px; }
+  .flag svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .flag path { fill: var(--red); filter: drop-shadow(0 10px 16px rgba(0, 0, 0, .4)); }
+  .flag img { position: absolute; left: 50%; top: 49%; height: 60%; transform: translate(-50%, -50%); }
+  /* title column, centred on the card so a square crop still shows it */
+  .col { position: absolute; left: 400px; right: 60px; top: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .org { margin: 0; color: var(--mist); font-weight: 700; font-size: 30px; line-height: 1.2; }
+  .org i { display: block; font-weight: 500; font-size: 24px; color: var(--mist-2); }
+  .title { margin: 6px 0 0; display: flex; flex-direction: column; align-items: center; }
+  .title img { width: 470px; height: auto; display: block; }
+  .title span { font-family: var(--display); font-weight: 900; font-size: 120px; line-height: .8; color: var(--brass); text-transform: uppercase; margin-top: 6px; letter-spacing: .02em; }
+  .tagline { margin: 18px 0 0; font-weight: 700; font-size: 30px; line-height: 1.3; }
+  .ticket { margin-top: 24px; display: flex; border-radius: 18px; overflow: hidden; background: var(--khadi); color: var(--ink); box-shadow: 0 8px 0 rgba(0, 0, 0, .28); text-align: left; }
+  .stub { background: var(--red); color: #fff; padding: 10px 22px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 4px dashed var(--khadi); }
+  .stub b { font-family: var(--display); font-weight: 900; font-size: 58px; line-height: .85; }
+  .stub small { font-family: var(--display); font-weight: 800; font-size: 24px; letter-spacing: .08em; }
+  .body { padding: 12px 22px; display: flex; flex-direction: column; justify-content: center; }
+  .body b { font-weight: 800; font-size: 32px; line-height: 1.2; color: var(--red-deep); }
+  .body span { font-weight: 600; font-size: 21px; color: #6B4A45; }
+</style>
+</head>
+<body>
+  <div class="pole"></div>
+  <div class="flag">
+    <svg viewBox="0 0 220 140" preserveAspectRatio="none"><path d="M0 10 C40 0 70 22 110 12 S180 0 220 12 L220 122 C180 112 150 134 110 124 S40 112 0 130 Z"/></svg>
+    <img src="../public/logo.webp" alt="">
+  </div>
+  <div class="col">
+    <p class="org">Kerala NGO Union <i>presents</i></p>
+    <h1 class="title"><img src="../public/arivu-title.webp" alt="അറിവ്"><span>Quiz</span></h1>
+    <p class="tagline">നമുക്ക് അറിവ് നേടാം.<br>അധികാരികൾ തിരിച്ചറിവ് നേടട്ടെ..</p>
+    <div class="ticket">
+      <div class="stub"><b>21</b><small>NOV</small></div>
+      <div class="body"><b>സെക്രട്ടേറിയറ്റ് വളയൽ</b><span>Saturday, 21 November 2026, Thiruvananthapuram</span></div>
+    </div>
+  </div>
+</body>
+</html>

@@ -26,6 +26,7 @@ src/admin.html     admin page (bundled into the Worker, not a public file)
 db/schema.sql      tables (D1 / SQLite)
 db/seed.sql        232 starter questions in Malayalam (Political, Constitution, KSR & Govt rules, General political; 21 bonus questions on the Secretariat Valayal)
 db/seed-questions.json  same questions as JSON (edit + `npm run seed:build`)
+public/og-image.jpg     link preview picture for WhatsApp, Facebook… (made from scripts/og-card.html by scripts/build-og-image.py)
 scripts/           local server, API tests, demo build, one-time Neon export
 ```
 
